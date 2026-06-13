@@ -1,0 +1,19 @@
+{
+  "cortex-debug.armToolchainPath": "D:/develop/STM32CubeCLT_1.21.0/GNU-tools-for-STM32/bin",
+  "cortex-debug.gdbPath": "D:/develop/STM32CubeCLT_1.21.0/GNU-tools-for-STM32/bin/arm-none-eabi-gdb.exe",
+  "cortex-debug.stm32cubeprogrammer": "D:/develop/stm32cubeprogrammer/bin",
+  "cortex-debug.stm32cubeprogrammer.windows": "D:/develop/stm32cubeprogrammer/bin",
+  "cmake.cmakePath": "cube-cmake",
+  "cmake.configureArgs": [
+    "-DCMAKE_COMMAND=cube-cmake"
+  ],
+  "cmake.preferredGenerators": [
+    "Ninja"
+  ],
+  "stm32cube-ide-clangd.path": "cube",
+  "stm32cube-ide-clangd.arguments": [
+    "starm-clangd",
+    "--query-driver=${env:CUBE_BUNDLE_PATH}/gnu-tools-for-stm32/13.3.1+st.9/bin/arm-none-eabi-gcc*",
+    "--query-driver=${env:CUBE_BUNDLE_PATH}/gnu-tools-for-stm32/13.3.1+st.9/bin/arm-none-eabi-g++*"
+  ]
+}

@@ -1,0 +1,41 @@
+# Build output
+/build/
+/cmake-build-*/
+*.elf
+*.bin
+*.hex
+*.map
+*.list
+*.o
+*.obj
+*.d
+*.su
+
+# STM32CubeMX scratch / temp
+mx.scratch
+*.bak
+*.tmp
+
+# IDE / editor
+.idea/
+.vs/
+*.user
+*.suo
+*.opensdf
+*.sdf
+*.launch
+
+# VS Code local cache
+.vscode/*
+!.vscode/launch.json
+!.vscode/tasks.json
+!.vscode/settings.json
+
+# Tool cache
+.clangd
+.claude/
+
+# OS files
+Thumbs.db
+Desktop.ini
+
