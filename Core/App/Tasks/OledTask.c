@@ -33,6 +33,9 @@ void StartOledTask(void *argument)
 
     for (;;) {
         uint8_t state = g_obs_state;
+        int distance10 = (int)(g_distance * 10.0f + 0.5f);
+        int object10 = (int)(g_mlx90614_object * 10.0f + 0.5f);
+        int ambient10 = (int)(g_mlx90614_ambient * 10.0f + 0.5f);
 
         task_run_count[2]++;
         if (state >= (sizeof(state_names) / sizeof(state_names[0]))) {
@@ -40,9 +43,11 @@ void StartOledTask(void *argument)
         }
 
         snprintf(line0, sizeof(line0), "ST:%s", state_names[state]);
-        snprintf(line1, sizeof(line1), "DIS:%5.1fcm", g_distance);
+        snprintf(line1, sizeof(line1), "DIS:%3d.%1dcm", distance10 / 10, distance10 % 10);
         snprintf(line2, sizeof(line2), "MQ8:%4u D:%u", g_mq8_adc_raw, g_mq8_do);
-        snprintf(line3, sizeof(line3), "T:%4.1f/%4.1f", g_mlx90614_object, g_mlx90614_ambient);
+        snprintf(line3, sizeof(line3), "T:%2d.%1d/%2d.%1d",
+                 object10 / 10, object10 % 10,
+                 ambient10 / 10, ambient10 % 10);
 
         OLED_NewFrame();
         OLED_PrintString(1, 1, line0, &font16x16, OLED_COLOR_NORMAL);

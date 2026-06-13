@@ -37,6 +37,14 @@ add_executable(${CMAKE_PROJECT_NAME})
 # Add STM32CubeMX generated sources
 add_subdirectory(cmake/stm32cubemx)
 
+# Keep critical runtime fixes outside CubeMX-generated files.
+set(CUBEMX_OVERRIDDEN_SOURCES
+    ${CMAKE_SOURCE_DIR}/Core/Src/stm32f4xx_it.c
+    ${CMAKE_SOURCE_DIR}/Core/Src/stm32f4xx_hal_timebase_tim.c
+)
+set_source_files_properties(${CUBEMX_OVERRIDDEN_SOURCES} PROPERTIES HEADER_FILE_ONLY TRUE)
+target_compile_definitions(stm32cubemx INTERFACE HSE_VALUE=8000000U)
+
 # Link directories setup
 target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined library search paths
@@ -46,6 +54,8 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Src/font.c
     Core/Src/oled.c
+    Core/App/Platform/stm32f4xx_hal_timebase_tim_user.c
+    Core/App/Platform/stm32f4xx_it_user.c
     Core/App/Tasks/BatteryCtrl.c
     Core/App/Tasks/CtrlTask.c
     Core/App/Tasks/DriverTask.c

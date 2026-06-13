@@ -1,4 +1,5 @@
 #include <string.h>
+#include <stdio.h>
 
 #include "cmsis_os2.h"
 
@@ -24,12 +25,33 @@ extern volatile uint32_t task_run_count[];
 static SystemState current_state = STATE_STANDBY;
 static uint8_t system_started = 0U;
 static uint32_t last_wifi_report = 0U;
+static uint32_t last_heartbeat_tick = 0U;
 
 volatile uint8_t g_obs_state = 0U;
 
 static void Ctrl_DebugText(const char *text)
 {
     HAL_UART_Transmit(&BOARD_DEBUG_UART, (uint8_t *)text, (uint16_t)strlen(text), 100U);
+}
+
+static void Ctrl_DebugHeartbeat(void)
+{
+    char buf[160];
+
+    (void)snprintf(buf, sizeof(buf),
+                   "[HB] led=%lu uart=%lu oled=%lu hcsr=%lu sensor=%lu driver=%lu ctrl=%lu rfid=%lu wifi=%lu dist=%d.%1d\r\n",
+                   (unsigned long)task_run_count[0],
+                   (unsigned long)task_run_count[1],
+                   (unsigned long)task_run_count[2],
+                   (unsigned long)task_run_count[3],
+                   (unsigned long)task_run_count[4],
+                   (unsigned long)task_run_count[5],
+                   (unsigned long)task_run_count[6],
+                   (unsigned long)task_run_count[7],
+                   (unsigned long)task_run_count[8],
+                   (int)(g_distance * 10.0f + 0.5f) / 10,
+                   (int)(g_distance * 10.0f + 0.5f) % 10);
+    Ctrl_DebugText(buf);
 }
 
 SystemState Ctrl_GetState(void)
@@ -195,6 +217,11 @@ void StartCtrlTask(void *argument)
         Ctrl_HandleAlarm(current_state);
         Ctrl_HandleWifiReport(&data, current_state);
         (void)osMessageQueuePut(MotorActionHandle, &cmd, 0U, 5U);
+
+        if ((osKernelGetTickCount() - last_heartbeat_tick) >= 1000U) {
+            last_heartbeat_tick = osKernelGetTickCount();
+            Ctrl_DebugHeartbeat();
+        }
 
         osDelay(30U);
     }
