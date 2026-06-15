@@ -56,7 +56,9 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Src/oled.c
     Core/App/Platform/stm32f4xx_hal_timebase_tim_user.c
     Core/App/Platform/stm32f4xx_it_user.c
+    Core/App/Platform/runtime_diag.c
     Core/App/Tasks/BatteryCtrl.c
+    Core/App/Tasks/Aht20.c
     Core/App/Tasks/CtrlTask.c
     Core/App/Tasks/DriverTask.c
     Core/App/Tasks/Encoder.c
@@ -80,6 +82,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/Core/App/Tasks
+    ${CMAKE_SOURCE_DIR}/Core/App/Platform
 )
 
 # Add project symbols (macros)

@@ -83,13 +83,13 @@ HAL_StatusTypeDef HAL_InitTick(uint32_t TickPriority)
     status = HAL_TIM_Base_Start_IT(&htim8);
     if (status == HAL_OK)
     {
-    /* Enable the TIM8 update global interrupt */
-        HAL_NVIC_EnableIRQ(TIM8_UP_TIM13_IRQn);
+    /* Enable the TIM8 global Interrupt */
+        HAL_NVIC_EnableIRQ(TIM3_IRQn);
       /* Configure the SysTick IRQ priority */
       if (TickPriority < (1UL << __NVIC_PRIO_BITS))
       {
         /* Configure the TIM IRQ priority */
-        HAL_NVIC_SetPriority(TIM8_UP_TIM13_IRQn, TickPriority, 0U);
+        HAL_NVIC_SetPriority(TIM3_IRQn, TickPriority, 0U);
         uwTickPrio = TickPriority;
       }
       else

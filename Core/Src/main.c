@@ -107,7 +107,6 @@ int main(void)
   /* USER CODE BEGIN 2 */
   HAL_Delay(10U);
   HAL_UART_Transmit(&huart2, (uint8_t *)"BOOT USART2\r\n", 13U, 20U);
-  HAL_UART_Transmit(&huart3, (uint8_t *)"BOOT USART3\r\n", 13U, 20U);
   SelfTest_Run();
   /* USER CODE END 2 */
 

@@ -6,6 +6,9 @@
 #include "board_compat.h"
 #include "main.h"
 #include "tim.h"
+#include "WifiComm.h"
+
+#define HCSR04_VERBOSE_LOG 0
 
 #define HCSR04_SAMPLES 5U
 #define HCSR04_VALID_MIN_US 117U
@@ -66,10 +69,15 @@ static uint32_t HCSR04_ReadPulseUs(void)
     return HCSR04_ElapsedUs(pulse_start, HCSR04_TimerNow());
 }
 
+#if HCSR04_VERBOSE_LOG
 static void HCSR04_DebugPrint(void)
 {
     char buf[160];
     int distance10 = (int)(g_distance * 10.0f + 0.5f);
+
+    if (Wifi_IsBridgeMode()) {
+        return;
+    }
 
     (void)snprintf(buf, sizeof(buf),
                    "[HCSR04] echo=%u timer50us=%lu pulse=%lu valid=%u dist=%d.%1d timeout=%u\r\n",
@@ -82,6 +90,7 @@ static void HCSR04_DebugPrint(void)
                    (unsigned)g_hcsr04_last_timeout_stage);
     HAL_UART_Transmit(&BOARD_DEBUG_UART, (uint8_t *)buf, (uint16_t)strlen(buf), 100U);
 }
+#endif
 
 static float HCSR04_TrimmedAverage(float *samples, uint8_t valid_count)
 {
@@ -115,7 +124,9 @@ static float HCSR04_TrimmedAverage(float *samples, uint8_t valid_count)
 void StartHCSR04Task(void *argument)
 {
     float samples[HCSR04_SAMPLES];
+#if HCSR04_VERBOSE_LOG
     uint32_t last_debug_tick = 0U;
+#endif
     (void)argument;
 
     HAL_TIM_Base_Start(&htim1);
@@ -160,9 +171,11 @@ void StartHCSR04Task(void *argument)
             g_distance = 0.0f;
         }
 
+#if HCSR04_VERBOSE_LOG
         if ((osKernelGetTickCount() - last_debug_tick) >= 1000U) {
             last_debug_tick = osKernelGetTickCount();
             HCSR04_DebugPrint();
         }
+#endif
     }
 }

@@ -13,6 +13,7 @@
 #define BOARD_HAS_MQ8_ADC 1
 
 #define BOARD_MLX_I2C hi2c1
+#define BOARD_AHT20_I2C hi2c2
 #define BOARD_OLED_I2C hi2c3
 #define BOARD_DEBUG_UART huart2
 #define BOARD_WIFI_UART huart3
@@ -25,7 +26,7 @@
 static inline void Board_BuzzerSet(uint8_t on)
 {
     HAL_GPIO_WritePin(BUZZER_IN_GPIO_Port, BUZZER_IN_Pin,
-                      on ? GPIO_PIN_RESET : GPIO_PIN_SET);
+                      on ? GPIO_PIN_SET : GPIO_PIN_RESET);
 }
 
 static inline void Board_StatusLedSet(uint8_t on)

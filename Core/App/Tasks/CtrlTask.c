@@ -1,5 +1,5 @@
-#include <string.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "cmsis_os2.h"
 
@@ -13,9 +13,13 @@
 #include "WifiComm.h"
 #include "board_compat.h"
 
+#define CTRLTASK_VERBOSE_LOG 0
+
 extern volatile float g_distance;
 extern volatile float g_mlx90614_object;
 extern volatile float g_mlx90614_ambient;
+extern volatile float g_aht20_temp;
+extern volatile float g_aht20_humidity;
 extern volatile uint16_t g_mq8_adc_raw;
 extern volatile uint8_t g_mq8_do;
 extern osMessageQueueId_t TrackHandle;
@@ -25,12 +29,18 @@ extern volatile uint32_t task_run_count[];
 static SystemState current_state = STATE_STANDBY;
 static uint8_t system_started = 0U;
 static uint32_t last_wifi_report = 0U;
-static uint32_t last_heartbeat_tick = 0U;
 
 volatile uint8_t g_obs_state = 0U;
 
+#if CTRLTASK_VERBOSE_LOG
+static uint32_t last_heartbeat_tick = 0U;
+
 static void Ctrl_DebugText(const char *text)
 {
+    if (Wifi_IsBridgeMode()) {
+        return;
+    }
+
     HAL_UART_Transmit(&BOARD_DEBUG_UART, (uint8_t *)text, (uint16_t)strlen(text), 100U);
 }
 
@@ -39,7 +49,7 @@ static void Ctrl_DebugHeartbeat(void)
     char buf[160];
 
     (void)snprintf(buf, sizeof(buf),
-                   "[HB] led=%lu uart=%lu oled=%lu hcsr=%lu sensor=%lu driver=%lu ctrl=%lu rfid=%lu wifi=%lu dist=%d.%1d\r\n",
+                   "[HB] led=%lu uart=%lu oled=%lu hcsr=%lu sensor=%lu driver=%lu ctrl=%lu rfid=%lu wifi=%lu drop=%lu dist=%d.%1d\r\n",
                    (unsigned long)task_run_count[0],
                    (unsigned long)task_run_count[1],
                    (unsigned long)task_run_count[2],
@@ -49,10 +59,12 @@ static void Ctrl_DebugHeartbeat(void)
                    (unsigned long)task_run_count[6],
                    (unsigned long)task_run_count[7],
                    (unsigned long)task_run_count[8],
+                   (unsigned long)Wifi_GetDroppedTxCount(),
                    (int)(g_distance * 10.0f + 0.5f) / 10,
                    (int)(g_distance * 10.0f + 0.5f) % 10);
     Ctrl_DebugText(buf);
 }
+#endif
 
 SystemState Ctrl_GetState(void)
 {
@@ -73,7 +85,9 @@ void Ctrl_Start(void)
 {
     system_started = 1U;
     current_state = STATE_PATROL;
+#if CTRLTASK_VERBOSE_LOG
     Ctrl_DebugText("[CTRL] Start -> PATROL\r\n");
+#endif
 }
 
 void Ctrl_Stop(void)
@@ -89,8 +103,11 @@ static SensorData_t Ctrl_ReadAllSensors(void)
     data.distance = g_distance;
     (void)osMessageQueueGet(TrackHandle, &data.track, NULL, 0U);
     data.track &= 0x0FU;
-    data.temperature = g_mlx90614_object;
+    data.temperature = g_aht20_temp;
     data.ambient_temp = g_mlx90614_ambient;
+    data.object_temp = g_mlx90614_object;
+    data.humidity = g_aht20_humidity;
+    data.cabin_temp = g_aht20_temp;
     data.mq8_adc = g_mq8_adc_raw;
     data.mq8_do = g_mq8_do;
     data.encoder_speed = Encoder_GetSpeed();
@@ -121,10 +138,6 @@ static SystemState Ctrl_DetermineState(const SensorData_t *data)
 static void Ctrl_HandleWifiReport(SensorData_t *data, SystemState state)
 {
     uint32_t now;
-
-    if (!data->wifi_connected) {
-        return;
-    }
 
     now = osKernelGetTickCount();
     if ((now - last_wifi_report) >= WIFI_REPORT_INTERVAL_MS) {
@@ -218,10 +231,12 @@ void StartCtrlTask(void *argument)
         Ctrl_HandleWifiReport(&data, current_state);
         (void)osMessageQueuePut(MotorActionHandle, &cmd, 0U, 5U);
 
+#if CTRLTASK_VERBOSE_LOG
         if ((osKernelGetTickCount() - last_heartbeat_tick) >= 1000U) {
             last_heartbeat_tick = osKernelGetTickCount();
             Ctrl_DebugHeartbeat();
         }
+#endif
 
         osDelay(30U);
     }

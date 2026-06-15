@@ -33,6 +33,9 @@ typedef struct {
     uint8_t track;
     float temperature;
     float ambient_temp;
+    float object_temp;
+    float humidity;
+    float cabin_temp;
     uint16_t mq8_adc;
     uint8_t mq8_do;
     int32_t encoder_speed;

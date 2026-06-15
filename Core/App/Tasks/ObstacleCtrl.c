@@ -22,7 +22,7 @@ typedef enum {
 static ObstacleState obs_state = OBS_IDLE;
 static uint32_t state_counter = 0U;
 static uint32_t obs_total_counter = 0U;
-static uint8_t obs_done = 0U;
+static uint8_t obs_done = 1U;
 
 void ObstacleCtrl_Init(void)
 {
@@ -34,7 +34,7 @@ void ObstacleCtrl_Reset(void)
     obs_state = OBS_IDLE;
     state_counter = 0U;
     obs_total_counter = 0U;
-    obs_done = 0U;
+    obs_done = 1U;
 }
 
 uint8_t ObstacleCtrl_IsDone(void)

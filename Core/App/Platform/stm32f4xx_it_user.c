@@ -1,4 +1,5 @@
 #include "main.h"
+#include "runtime_diag.h"
 #include "usart.h"
 
 extern TIM_HandleTypeDef htim1;
@@ -14,11 +15,15 @@ void NMI_Handler(void)
     }
 }
 
-void HardFault_Handler(void)
+__attribute__((naked)) void HardFault_Handler(void)
 {
-    while (1)
-    {
-    }
+    __asm volatile(
+        "tst lr, #4        \n"
+        "ite eq            \n"
+        "mrseq r0, msp     \n"
+        "mrsne r0, psp     \n"
+        "mov r1, lr        \n"
+        "b RuntimeDiag_HardFaultHandler \n");
 }
 
 void MemManage_Handler(void)

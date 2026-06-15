@@ -6,23 +6,158 @@
 #include "WifiComm.h"
 #include "board_compat.h"
 
+#define WIFI_AP_SSID "SmartCar_F407"
+#define WIFI_AP_PASSWORD "12345678"
+#define WIFI_TCP_PORT 8080U
+
 #define WIFI_TX_QUEUE_LEN 8U
-#define WIFI_TX_MSG_SIZE 160U
-#define WIFI_RX_BUF_SIZE 96U
+#define WIFI_TX_MSG_SIZE 256U
+#define WIFI_RX_BUF_SIZE 256U
 #define WIFI_RX_IDLE_TIMEOUT_MS 120U
-#define WIFI_CONNECTED_TIMEOUT_MS 10000U
+#define WIFI_AT_INIT_INTERVAL_MS 350U
+#define WIFI_AT_RESPONSE_TIMEOUT_MS 2500U
+#define WIFI_AT_MAX_RETRY 2U
+#define WIFI_TCP_SEND_WAIT_MS 250U
+#define WIFI_TCP_SEND_GAP_MS 800U
+#define WIFI_STATUS_POLL_INTERVAL_MS 1000U
+#define WIFI_LINK_ALIVE_INTERVAL_MS 3000U
+
+typedef enum {
+    WIFI_TX_KIND_LINE = 0,
+    WIFI_TX_KIND_TELEMETRY,
+    WIFI_TX_KIND_ALERT,
+    WIFI_TX_KIND_RFID
+} WifiTxKind_t;
 
 typedef struct {
-    char text[WIFI_TX_MSG_SIZE];
+    WifiTxKind_t kind;
+    union {
+        char text[WIFI_TX_MSG_SIZE];
+        struct {
+            SensorData_t data;
+        } telemetry;
+        struct {
+            SystemState state;
+            SensorData_t data;
+        } alert;
+        struct {
+            uint8_t rfid_id;
+            char location[24];
+        } rfid;
+    } payload;
 } WifiTxMsg_t;
 
 static osMessageQueueId_t g_wifi_tx_queue = NULL;
 static uint8_t g_wifi_rx_byte = 0U;
-static volatile uint8_t g_wifi_connected = 0U;
+static volatile uint8_t g_wifi_client_connected = 0U;
 static volatile uint8_t g_wifi_cmd_ready = 0U;
 static volatile uint16_t g_wifi_rx_idx = 0U;
 static volatile uint32_t g_wifi_last_rx_tick = 0U;
 static char g_wifi_rx_buf[WIFI_RX_BUF_SIZE];
+static volatile uint32_t g_wifi_tx_drop_count = 0U;
+static uint8_t g_wifi_link_id = 0U;
+static uint8_t g_wifi_init_step = 0U;
+static uint8_t g_wifi_ap_ready = 0U;
+static uint32_t g_wifi_last_init_tick = 0U;
+static uint32_t g_wifi_at_sent_tick = 0U;
+static uint8_t g_wifi_at_waiting = 0U;
+static uint8_t g_wifi_at_retry = 0U;
+static volatile uint8_t g_wifi_bridge_mode = 0U;
+static uint32_t g_wifi_last_status_poll_tick = 0U;
+static uint32_t g_wifi_last_alive_tick = 0U;
+static uint32_t g_wifi_last_tx_tick = 0U;
+
+extern volatile float g_distance;
+extern volatile float g_aht20_temp;
+extern volatile float g_aht20_humidity;
+extern volatile uint16_t g_mq8_adc_raw;
+extern volatile uint8_t g_track_status;
+
+static const char *Wifi_ParseUint(const char *text, uint16_t *value);
+static void Wifi_SendTcpPayload(const char *payload);
+
+static const char *const g_wifi_init_cmds[] = {
+    "AT\r\n",
+    "ATE0\r\n",
+    "AT+CWMODE=2\r\n",
+    "AT+CWSAP=\"" WIFI_AP_SSID "\",\"" WIFI_AP_PASSWORD "\",5,3\r\n",
+    "AT+CIPMUX=1\r\n",
+    "AT+CIPSERVER=1,8080\r\n",
+    "AT+CIPSTO=0\r\n",
+    "AT+CIFSR\r\n",
+};
+
+static void Wifi_DebugText(const char *text)
+{
+    if ((text != NULL) && !g_wifi_bridge_mode) {
+        (void)HAL_UART_Transmit(&BOARD_DEBUG_UART, (uint8_t *)text, (uint16_t)strlen(text), 100U);
+    }
+}
+
+static void Wifi_FormatTenths(char *buf, size_t buf_size, int value10)
+{
+    int whole = value10 / 10;
+    int frac = value10 >= 0 ? (value10 % 10) : -(value10 % 10);
+
+    (void)snprintf(buf, buf_size, "%d.%1d", whole, frac);
+}
+
+static void Wifi_FormatTrackBin(char *buf, size_t buf_size, uint8_t track)
+{
+    (void)snprintf(buf, buf_size, "%u%u%u%u",
+                   (unsigned)((track >> 3) & 0x01U),
+                   (unsigned)((track >> 2) & 0x01U),
+                   (unsigned)((track >> 1) & 0x01U),
+                   (unsigned)(track & 0x01U));
+}
+
+static void Wifi_BuildCompactTelemetry(char *line, size_t line_size, const SensorData_t *data)
+{
+    char mq8_buf[12];
+    char aht_temp_buf[12];
+    char aht_hum_buf[12];
+    char dist_buf[12];
+    char track_bin[5];
+    uint8_t track = 0U;
+
+    if ((line == NULL) || (line_size == 0U) || (data == NULL)) {
+        return;
+    }
+
+    track = data->track & 0x0FU;
+    Wifi_FormatTenths(mq8_buf, sizeof(mq8_buf), (int)data->mq8_adc * 10);
+    Wifi_FormatTenths(aht_temp_buf, sizeof(aht_temp_buf),
+                      (int)(data->temperature * 10.0f + ((data->temperature >= 0.0f) ? 0.5f : -0.5f)));
+    Wifi_FormatTenths(aht_hum_buf, sizeof(aht_hum_buf),
+                      (int)(data->humidity * 10.0f + ((data->humidity >= 0.0f) ? 0.5f : -0.5f)));
+    Wifi_FormatTenths(dist_buf, sizeof(dist_buf),
+                      (int)(data->distance * 10.0f + ((data->distance >= 0.0f) ? 0.5f : -0.5f)));
+    Wifi_FormatTrackBin(track_bin, sizeof(track_bin), track);
+
+    (void)snprintf(line, line_size,
+                   "{\"type\":\"telemetry\",\"MQ8\":%s,\"AHT_temp\":%s,\"AHT_hum\":%s,"
+                   "\"dist\":%s,\"track\":%u,\"track_bin\":\"%s\"}\n",
+                   mq8_buf,
+                   aht_temp_buf,
+                   aht_hum_buf,
+                   dist_buf,
+                   (unsigned)track,
+                   track_bin);
+}
+
+static void Wifi_SendLiveTelemetry(void)
+{
+    SensorData_t data = {0};
+    char line[WIFI_TX_MSG_SIZE];
+
+    data.distance = g_distance;
+    data.temperature = g_aht20_temp;
+    data.humidity = g_aht20_humidity;
+    data.mq8_adc = g_mq8_adc_raw;
+    data.track = g_track_status;
+    Wifi_BuildCompactTelemetry(line, sizeof(line), &data);
+    Wifi_SendTcpPayload(line);
+}
 
 static const char *Wifi_StateName(SystemState state)
 {
@@ -44,16 +179,133 @@ static const char *Wifi_StateName(SystemState state)
     }
 }
 
-static void Wifi_QueueLine(const char *text)
+static void Wifi_SendRawToEsp(const char *text)
 {
-    WifiTxMsg_t msg = {{0}};
+    if (text != NULL) {
+        (void)HAL_UART_Transmit(&BOARD_WIFI_UART, (uint8_t *)text, (uint16_t)strlen(text), 200U);
+    }
+}
 
-    if ((g_wifi_tx_queue == NULL) || (text == NULL)) {
+static void Wifi_DebugEvent(const char *tag, uint8_t link_id, uint16_t value)
+{
+    char buf[80];
+
+    (void)snprintf(buf, sizeof(buf), "[WIFI] %s link=%u value=%u\r\n",
+                   tag,
+                   (unsigned)link_id,
+                   (unsigned)value);
+    Wifi_DebugText(buf);
+}
+
+static uint8_t Wifi_ParseConnectLinkId(const char *text, uint8_t fallback)
+{
+    char *connect;
+    char *p;
+    uint16_t link = 0U;
+
+    connect = strstr(text, ",CONNECT");
+    if (connect == NULL) {
+        return fallback;
+    }
+
+    p = connect;
+    while ((p > text) && (*(p - 1) >= '0') && (*(p - 1) <= '9')) {
+        p--;
+    }
+
+    if (p == connect) {
+        return fallback;
+    }
+
+    if (Wifi_ParseUint(p, &link) == NULL || link > 4U) {
+        return fallback;
+    }
+
+    return (uint8_t)link;
+}
+
+static void Wifi_ProcessStatusText(const char *text)
+{
+    const char *status;
+    uint16_t link = 0U;
+
+    status = strstr(text, "+CIPSTATUS:");
+    if (status == NULL) {
         return;
     }
 
-    (void)snprintf(msg.text, sizeof(msg.text), "%s", text);
-    (void)osMessageQueuePut(g_wifi_tx_queue, &msg, 0U, 0U);
+    status += strlen("+CIPSTATUS:");
+    if (Wifi_ParseUint(status, &link) == NULL || link > 4U) {
+        return;
+    }
+
+    g_wifi_link_id = (uint8_t)link;
+    g_wifi_client_connected = 1U;
+    Wifi_DebugEvent("status client", g_wifi_link_id, 0U);
+}
+
+static void Wifi_ServiceAtInit(void)
+{
+    uint32_t now = osKernelGetTickCount();
+
+    if (g_wifi_bridge_mode) {
+        return;
+    }
+
+    if (g_wifi_ap_ready) {
+        return;
+    }
+
+    if (g_wifi_at_waiting) {
+        if ((now - g_wifi_at_sent_tick) < WIFI_AT_RESPONSE_TIMEOUT_MS) {
+            return;
+        }
+
+        if (g_wifi_at_retry < WIFI_AT_MAX_RETRY) {
+            g_wifi_at_retry++;
+            g_wifi_at_waiting = 0U;
+        } else {
+            g_wifi_init_step++;
+            g_wifi_at_retry = 0U;
+            g_wifi_at_waiting = 0U;
+        }
+    }
+
+    if ((now - g_wifi_last_init_tick) < WIFI_AT_INIT_INTERVAL_MS) {
+        return;
+    }
+    g_wifi_last_init_tick = now;
+
+    if (g_wifi_init_step < (sizeof(g_wifi_init_cmds) / sizeof(g_wifi_init_cmds[0]))) {
+        Wifi_SendRawToEsp(g_wifi_init_cmds[g_wifi_init_step]);
+        g_wifi_at_sent_tick = now;
+        g_wifi_at_waiting = 1U;
+        return;
+    }
+
+    g_wifi_ap_ready = 1U;
+    Wifi_DebugText("[WIFI] AP ready: SSID=" WIFI_AP_SSID " IP=192.168.4.1 PORT=8080\r\n");
+}
+
+static void Wifi_ServiceStatusPoll(void)
+{
+    uint32_t now = osKernelGetTickCount();
+
+    if (!g_wifi_ap_ready || g_wifi_bridge_mode) {
+        return;
+    }
+
+    if (g_wifi_client_connected) {
+        return;
+    }
+
+    if ((now - g_wifi_last_status_poll_tick) < WIFI_STATUS_POLL_INTERVAL_MS) {
+        return;
+    }
+
+    g_wifi_last_status_poll_tick = now;
+    Wifi_DebugText("[WIFI] poll status\r\n");
+    Wifi_SendRawToEsp("AT+CIPSTATUS\r\n");
 }
 
 static void Wifi_SendAck(const char *cmd, const char *result)
@@ -64,7 +316,7 @@ static void Wifi_SendAck(const char *cmd, const char *result)
                    "{\"type\":\"ack\",\"cmd\":\"%s\",\"result\":\"%s\"}\n",
                    (cmd != NULL) ? cmd : "unknown",
                    (result != NULL) ? result : "ok");
-    Wifi_QueueLine(line);
+    Wifi_SendTcpPayload(line);
 }
 
 static void Wifi_ProcessCommand(const char *cmd)
@@ -91,11 +343,143 @@ static void Wifi_ProcessCommand(const char *cmd)
     }
 
     if (strstr(cmd, "status") != NULL) {
+        Wifi_DebugText("[WIFI] cmd=status\r\n");
         Wifi_SendAck("status", Wifi_StateName(Ctrl_GetState()));
         return;
     }
 
     Wifi_SendAck("unknown", "ignored");
+}
+
+static const char *Wifi_ParseUint(const char *text, uint16_t *value)
+{
+    uint16_t result = 0U;
+    uint8_t has_digit = 0U;
+
+    while (*text >= '0' && *text <= '9') {
+        has_digit = 1U;
+        result = (uint16_t)((result * 10U) + (uint16_t)(*text - '0'));
+        text++;
+    }
+
+    if (!has_digit) {
+        return NULL;
+    }
+
+    *value = result;
+    return text;
+}
+
+static void Wifi_ProcessTcpPayload(uint8_t link_id, const char *payload, uint16_t payload_len)
+{
+    static char cmd[WIFI_RX_BUF_SIZE];
+    uint16_t copy_len = payload_len;
+
+    if (copy_len >= sizeof(cmd)) {
+        copy_len = sizeof(cmd) - 1U;
+    }
+
+    memcpy(cmd, payload, copy_len);
+    cmd[copy_len] = '\0';
+
+    while (copy_len > 0U &&
+           (cmd[copy_len - 1U] == '\r' || cmd[copy_len - 1U] == '\n' || cmd[copy_len - 1U] == ' ')) {
+        cmd[--copy_len] = '\0';
+    }
+
+    g_wifi_link_id = link_id;
+    g_wifi_client_connected = 1U;
+    Wifi_ProcessCommand(cmd);
+}
+
+static void Wifi_ProcessRxText(char *text)
+{
+    char *ipd;
+
+    if (!g_wifi_ap_ready && g_wifi_at_waiting &&
+        (strstr(text, "OK") != NULL || strstr(text, "ERROR") != NULL ||
+         strstr(text, "ready") != NULL || strstr(text, "no change") != NULL)) {
+        g_wifi_init_step++;
+        g_wifi_at_retry = 0U;
+        g_wifi_at_waiting = 0U;
+    }
+
+    if (strstr(text, ",CONNECT") != NULL || strstr(text, "CONNECT\r\n") != NULL) {
+        g_wifi_link_id = Wifi_ParseConnectLinkId(text, g_wifi_link_id);
+        g_wifi_client_connected = 1U;
+        Wifi_DebugEvent("client connect", g_wifi_link_id, 0U);
+    }
+
+    Wifi_ProcessStatusText(text);
+
+    if (strstr(text, ",CLOSED") != NULL || strstr(text, "CLOSED") != NULL) {
+        g_wifi_client_connected = 0U;
+        Wifi_DebugEvent("client closed", g_wifi_link_id, 0U);
+    }
+
+    if (g_wifi_ap_ready &&
+        (strstr(text, "SEND OK") != NULL || strstr(text, "SEND FAIL") != NULL ||
+         strstr(text, "link is not") != NULL || strstr(text, "ERROR") != NULL ||
+         strstr(text, ">") != NULL)) {
+        Wifi_DebugText("[WIFI] esp: ");
+        Wifi_DebugText(text);
+        if (strchr(text, '\n') == NULL) {
+            Wifi_DebugText("\r\n");
+        }
+    }
+
+    ipd = strstr(text, "+IPD,");
+    while (ipd != NULL) {
+        const char *p = ipd + 5;
+        uint16_t link = 0U;
+        uint16_t len = 0U;
+
+        p = Wifi_ParseUint(p, &link);
+        if (p == NULL || *p != ',') {
+            break;
+        }
+        p++;
+
+        p = Wifi_ParseUint(p, &len);
+        if (p == NULL || *p != ':') {
+            break;
+        }
+        p++;
+
+        Wifi_DebugEvent("+IPD", (uint8_t)link, len);
+        Wifi_ProcessTcpPayload((uint8_t)link, p, len);
+        ipd = strstr((char *)(p + len), "+IPD,");
+    }
+
+    if (strstr(text, "+IPD,") == NULL &&
+        (strstr(text, "start") != NULL || strstr(text, "stop") != NULL ||
+         strstr(text, "ping") != NULL || strstr(text, "status") != NULL)) {
+        Wifi_ProcessCommand(text);
+    }
+}
+
+static void Wifi_SendTcpPayload(const char *payload)
+{
+    char cmd[40];
+    size_t len;
+
+    if ((payload == NULL) || !g_wifi_ap_ready) {
+        return;
+    }
+
+    len = strlen(payload);
+    if (len == 0U || len > 2048U) {
+        return;
+    }
+
+    (void)snprintf(cmd, sizeof(cmd), "AT+CIPSEND=%u,%lu\r\n",
+                   (unsigned)g_wifi_link_id,
+                   (unsigned long)len);
+    g_wifi_last_tx_tick = osKernelGetTickCount();
+    Wifi_DebugEvent("tx", g_wifi_link_id, (uint16_t)len);
+    Wifi_SendRawToEsp(cmd);
+    osDelay(WIFI_TCP_SEND_WAIT_MS);
+    (void)HAL_UART_Transmit(&BOARD_WIFI_UART, (uint8_t *)payload, (uint16_t)len, 300U);
 }
 
 void Wifi_Init(void)
@@ -105,74 +489,106 @@ void Wifi_Init(void)
     }
 
     g_wifi_tx_queue = osMessageQueueNew(WIFI_TX_QUEUE_LEN, sizeof(WifiTxMsg_t), NULL);
-    g_wifi_connected = 0U;
+    g_wifi_client_connected = 0U;
     g_wifi_cmd_ready = 0U;
     g_wifi_rx_idx = 0U;
     g_wifi_last_rx_tick = 0U;
+    g_wifi_tx_drop_count = 0U;
+    g_wifi_link_id = 0U;
+    g_wifi_init_step = 0U;
+    g_wifi_ap_ready = 0U;
+    g_wifi_last_init_tick = 0U;
+    g_wifi_at_sent_tick = 0U;
+    g_wifi_at_waiting = 0U;
+    g_wifi_at_retry = 0U;
+    g_wifi_last_status_poll_tick = 0U;
+    g_wifi_last_alive_tick = 0U;
+    g_wifi_last_tx_tick = 0U;
     memset(g_wifi_rx_buf, 0, sizeof(g_wifi_rx_buf));
 }
 
 uint8_t Wifi_IsConnected(void)
 {
-    return g_wifi_connected;
+    return g_wifi_client_connected;
+}
+
+uint32_t Wifi_GetDroppedTxCount(void)
+{
+    return g_wifi_tx_drop_count;
 }
 
 void Wifi_SendTelemetry(SensorData_t *data)
 {
-    char line[WIFI_TX_MSG_SIZE];
-    float humidity = 0.0f;
-    float h2_value = 0.0f;
-    float temp = 0.0f;
-    float cab_temp = 0.0f;
+    WifiTxMsg_t msg = {0};
 
-    if (data == NULL) {
+    if ((data == NULL) || (g_wifi_tx_queue == NULL)) {
         return;
     }
 
-    h2_value = (float)data->mq8_adc;
-    temp = data->temperature;
-    cab_temp = data->ambient_temp;
-
-    (void)snprintf(line, sizeof(line),
-                   "{\"type\":\"telemetry\",\"h2\":%.1f,\"temp\":%.1f,\"hum\":%.1f,"
-                   "\"cab\":%.1f,\"dist\":%.1f,\"track\":%u,\"mq8_do\":%u,\"rfid\":%u,"
-                   "\"bat\":%u}\n",
-                   h2_value, temp, humidity, cab_temp, data->distance,
-                   (unsigned)data->track, (unsigned)data->mq8_do,
-                   (unsigned)data->rfid_id, (unsigned)data->battery_pct);
-    Wifi_QueueLine(line);
+    msg.kind = WIFI_TX_KIND_TELEMETRY;
+    msg.payload.telemetry.data = *data;
+    if (osMessageQueuePut(g_wifi_tx_queue, &msg, 0U, 0U) != osOK) {
+        g_wifi_tx_drop_count++;
+    }
 }
 
 void Wifi_SendAlert(SystemState state, SensorData_t *data)
 {
-    char line[WIFI_TX_MSG_SIZE];
+    WifiTxMsg_t msg = {0};
 
-    if (data == NULL) {
+    if ((data == NULL) || (g_wifi_tx_queue == NULL)) {
         return;
     }
 
-    (void)snprintf(line, sizeof(line),
-                   "{\"type\":\"alert\",\"state\":\"%s\",\"temp\":%.1f,\"cab\":%.1f,"
-                   "\"dist\":%.1f,\"h2\":%u}\n",
-                   Wifi_StateName(state), data->temperature, data->ambient_temp,
-                   data->distance, (unsigned)data->mq8_adc);
-    Wifi_QueueLine(line);
+    msg.kind = WIFI_TX_KIND_ALERT;
+    msg.payload.alert.state = state;
+    msg.payload.alert.data = *data;
+    if (osMessageQueuePut(g_wifi_tx_queue, &msg, 0U, 0U) != osOK) {
+        g_wifi_tx_drop_count++;
+    }
 }
 
 void Wifi_SendRfidTag(uint8_t rfid_id, const char *location)
 {
-    char line[WIFI_TX_MSG_SIZE];
+    WifiTxMsg_t msg = {0};
 
-    (void)snprintf(line, sizeof(line),
-                   "{\"type\":\"rfid\",\"id\":%u,\"location\":\"%s\"}\n",
-                   (unsigned)rfid_id,
-                   (location != NULL) ? location : "unknown");
-    Wifi_QueueLine(line);
+    if (g_wifi_tx_queue == NULL) {
+        return;
+    }
+
+    msg.kind = WIFI_TX_KIND_RFID;
+    msg.payload.rfid.rfid_id = rfid_id;
+    (void)snprintf(msg.payload.rfid.location, sizeof(msg.payload.rfid.location),
+                   "%s", (location != NULL) ? location : "unknown");
+    if (osMessageQueuePut(g_wifi_tx_queue, &msg, 0U, 0U) != osOK) {
+        g_wifi_tx_drop_count++;
+    }
 }
 
 uint8_t Wifi_CheckCommand(void)
 {
     return g_wifi_cmd_ready;
+}
+
+void Wifi_SetBridgeMode(uint8_t enable)
+{
+    if (enable) {
+        g_wifi_bridge_mode = 1U;
+        __disable_irq();
+        g_wifi_rx_idx = 0U;
+        g_wifi_cmd_ready = 0U;
+        memset(g_wifi_rx_buf, 0, sizeof(g_wifi_rx_buf));
+        __enable_irq();
+        g_wifi_at_waiting = 0U;
+        g_wifi_at_retry = 0U;
+    }
+
+    g_wifi_bridge_mode = enable ? 1U : 0U;
+}
+
+uint8_t Wifi_IsBridgeMode(void)
+{
+    return g_wifi_bridge_mode;
 }
 
 void Wifi_StartReceiveIT(void)
@@ -186,7 +602,12 @@ void Wifi_UartRxCpltCallback(UART_HandleTypeDef *huart)
         return;
     }
 
-    g_wifi_connected = 1U;
+    if (g_wifi_bridge_mode) {
+        (void)HAL_UART_Transmit(&BOARD_DEBUG_UART, &g_wifi_rx_byte, 1U, 10U);
+        (void)HAL_UART_Receive_IT(huart, &g_wifi_rx_byte, 1U);
+        return;
+    }
+
     g_wifi_last_rx_tick = osKernelGetTickCount();
 
     if (g_wifi_rx_idx < (WIFI_RX_BUF_SIZE - 1U)) {
@@ -203,15 +624,19 @@ void Wifi_UartRxCpltCallback(UART_HandleTypeDef *huart)
 
 void Wifi_TaskStep(void)
 {
+    static WifiTxMsg_t msg;
+    static char line[WIFI_TX_MSG_SIZE];
     uint32_t now = osKernelGetTickCount();
-    WifiTxMsg_t msg;
 
-    if (g_wifi_connected && ((now - g_wifi_last_rx_tick) > WIFI_CONNECTED_TIMEOUT_MS)) {
-        g_wifi_connected = 0U;
+    Wifi_ServiceAtInit();
+    Wifi_ServiceStatusPoll();
+
+    if (g_wifi_bridge_mode) {
+        return;
     }
 
     if (g_wifi_cmd_ready || (g_wifi_rx_idx > 0U && ((now - g_wifi_last_rx_tick) >= WIFI_RX_IDLE_TIMEOUT_MS))) {
-        char cmd[WIFI_RX_BUF_SIZE];
+        static char rx_copy[WIFI_RX_BUF_SIZE];
         uint16_t len;
 
         __disable_irq();
@@ -219,23 +644,88 @@ void Wifi_TaskStep(void)
         if (len >= WIFI_RX_BUF_SIZE) {
             len = WIFI_RX_BUF_SIZE - 1U;
         }
-        memcpy(cmd, g_wifi_rx_buf, len);
-        cmd[len] = '\0';
+        memcpy(rx_copy, g_wifi_rx_buf, len);
+        rx_copy[len] = '\0';
         g_wifi_rx_idx = 0U;
         g_wifi_cmd_ready = 0U;
         memset(g_wifi_rx_buf, 0, sizeof(g_wifi_rx_buf));
         __enable_irq();
 
-        while (len > 0U && (cmd[len - 1U] == '\r' || cmd[len - 1U] == '\n' || cmd[len - 1U] == ' ')) {
-            cmd[--len] = '\0';
-        }
+        Wifi_ProcessRxText(rx_copy);
+    }
 
-        Wifi_ProcessCommand(cmd);
+    now = osKernelGetTickCount();
+
+    if (g_wifi_client_connected &&
+        ((now - g_wifi_last_alive_tick) >= WIFI_LINK_ALIVE_INTERVAL_MS) &&
+        ((now - g_wifi_last_tx_tick) >= WIFI_TCP_SEND_GAP_MS)) {
+        g_wifi_last_alive_tick = now;
+        Wifi_SendLiveTelemetry();
+        return;
+    }
+
+    if ((now - g_wifi_last_tx_tick) < WIFI_TCP_SEND_GAP_MS) {
+        return;
     }
 
     if ((g_wifi_tx_queue != NULL) &&
         (osMessageQueueGet(g_wifi_tx_queue, &msg, NULL, 0U) == osOK)) {
-        (void)HAL_UART_Transmit(&BOARD_WIFI_UART, (uint8_t *)msg.text,
-                                (uint16_t)strlen(msg.text), 100U);
+        line[0] = '\0';
+
+        switch (msg.kind) {
+        case WIFI_TX_KIND_LINE:
+            (void)snprintf(line, sizeof(line), "%s", msg.payload.text);
+            break;
+        case WIFI_TX_KIND_TELEMETRY:
+            Wifi_BuildCompactTelemetry(line, sizeof(line), &msg.payload.telemetry.data);
+            break;
+        case WIFI_TX_KIND_ALERT:
+        {
+            char mq8_buf[12];
+            char aht_temp_buf[12];
+            char aht_hum_buf[12];
+            char mlx_obj_buf[12];
+            char mlx_amb_buf[12];
+            char dist_buf[12];
+            char track_bin[5];
+            SensorData_t *data = &msg.payload.alert.data;
+
+            Wifi_FormatTenths(mq8_buf, sizeof(mq8_buf), (int)data->mq8_adc * 10);
+            Wifi_FormatTenths(aht_temp_buf, sizeof(aht_temp_buf), (int)(data->temperature * 10.0f + ((data->temperature >= 0.0f) ? 0.5f : -0.5f)));
+            Wifi_FormatTenths(aht_hum_buf, sizeof(aht_hum_buf), (int)(data->humidity * 10.0f + ((data->humidity >= 0.0f) ? 0.5f : -0.5f)));
+            Wifi_FormatTenths(mlx_obj_buf, sizeof(mlx_obj_buf), (int)(data->object_temp * 10.0f + ((data->object_temp >= 0.0f) ? 0.5f : -0.5f)));
+            Wifi_FormatTenths(mlx_amb_buf, sizeof(mlx_amb_buf), (int)(data->ambient_temp * 10.0f + ((data->ambient_temp >= 0.0f) ? 0.5f : -0.5f)));
+            Wifi_FormatTenths(dist_buf, sizeof(dist_buf), (int)(data->distance * 10.0f + ((data->distance >= 0.0f) ? 0.5f : -0.5f)));
+            (void)snprintf(track_bin, sizeof(track_bin), "%u%u%u%u",
+                           (unsigned)((data->track >> 3) & 0x01U),
+                           (unsigned)((data->track >> 2) & 0x01U),
+                           (unsigned)((data->track >> 1) & 0x01U),
+                           (unsigned)(data->track & 0x01U));
+
+            (void)snprintf(line, sizeof(line),
+                           "{\"type\":\"alert\",\"state\":\"%s\",\"MQ8\":%s,\"AHT_temp\":%s,\"AHT_hum\":%s,"
+                           "\"MLX_obj\":%s,\"MLX_amb\":%s,\"dist\":%s,"
+                           "\"track\":%u,\"track_bin\":\"%s\",\"mq8_do\":%u,\"rfid\":%u,"
+                           "\"bat\":%u}\n",
+                           Wifi_StateName(msg.payload.alert.state),
+                           mq8_buf, aht_temp_buf, aht_hum_buf,
+                           mlx_obj_buf, mlx_amb_buf, dist_buf,
+                           (unsigned)data->track, track_bin, (unsigned)data->mq8_do,
+                           (unsigned)data->rfid_id, (unsigned)data->battery_pct);
+            break;
+        }
+        case WIFI_TX_KIND_RFID:
+            (void)snprintf(line, sizeof(line),
+                           "{\"type\":\"rfid\",\"rfid\":%u,\"location\":\"%s\"}\n",
+                           (unsigned)msg.payload.rfid.rfid_id,
+                           msg.payload.rfid.location);
+            break;
+        default:
+            break;
+        }
+
+        if (line[0] != '\0') {
+            Wifi_SendTcpPayload(line);
+        }
     }
 }

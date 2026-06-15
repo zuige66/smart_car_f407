@@ -1,10 +1,15 @@
+#include <stdio.h>
 #include <string.h>
 
 #include "cmsis_os2.h"
 
 #include "main.h"
 #include "RfidReader.h"
+#include "board_compat.h"
 #include "spi.h"
+#include "WifiComm.h"
+
+#define RFIDTASK_VERBOSE_LOG 0
 
 extern osThreadId_t myRfidTaskHandle;
 extern volatile uint32_t task_run_count[];
@@ -55,6 +60,43 @@ typedef enum {
 
 static uint8_t g_rfid_last_uid[5] = {0};
 static uint8_t g_rfid_last_uid_size = 0U;
+static uint32_t g_rfid_overflow_count = 0U;
+
+#if RFIDTASK_VERBOSE_LOG
+static void Rfid_DebugOverflow(const char *stage,
+                               uint8_t fifo_level,
+                               uint8_t back_capacity,
+                               uint16_t back_bits)
+{
+    char buf[96];
+
+    g_rfid_overflow_count++;
+    if (Wifi_IsBridgeMode()) {
+        return;
+    }
+
+    (void)snprintf(buf, sizeof(buf),
+                   "[RFID] overflow stage=%s fifo=%u cap=%u bits=%u cnt=%lu\r\n",
+                   (stage != NULL) ? stage : "unknown",
+                   (unsigned)fifo_level,
+                   (unsigned)back_capacity,
+                   (unsigned)back_bits,
+                   (unsigned long)g_rfid_overflow_count);
+    (void)HAL_UART_Transmit(&BOARD_DEBUG_UART, (uint8_t *)buf, (uint16_t)strlen(buf), 100U);
+}
+#else
+static void Rfid_DebugOverflow(const char *stage,
+                               uint8_t fifo_level,
+                               uint8_t back_capacity,
+                               uint16_t back_bits)
+{
+    (void)stage;
+    (void)fifo_level;
+    (void)back_capacity;
+    (void)back_bits;
+    g_rfid_overflow_count++;
+}
+#endif
 
 static void Rfid_Select(void)
 {
@@ -153,6 +195,7 @@ static RfidStatus_t Rfid_ToCard(uint8_t command,
                                 const uint8_t *send_data,
                                 uint8_t send_len,
                                 uint8_t *back_data,
+                                uint8_t back_capacity,
                                 uint16_t *back_bits)
 {
     uint8_t irq_en = 0U;
@@ -161,6 +204,8 @@ static RfidStatus_t Rfid_ToCard(uint8_t command,
     uint8_t irq;
     uint8_t error;
     uint8_t fifo_level;
+    uint8_t fifo_count;
+    uint8_t store_count;
     uint8_t last_bits;
 
     if ((send_data == NULL) || (send_len == 0U)) {
@@ -221,15 +266,25 @@ static RfidStatus_t Rfid_ToCard(uint8_t command,
             *back_bits = (uint16_t)(fifo_level * 8U);
         }
 
-        if (fifo_level == 0U) {
-            fifo_level = 1U;
+        fifo_count = fifo_level;
+        if (fifo_count == 0U) {
+            fifo_count = 1U;
         }
-        if (fifo_level > RFID_MAX_LEN) {
-            fifo_level = RFID_MAX_LEN;
+        if (fifo_count > RFID_MAX_LEN) {
+            fifo_count = RFID_MAX_LEN;
+        }
+        store_count = (fifo_count < back_capacity) ? fifo_count : back_capacity;
+
+        for (i = 0U; i < fifo_count; ++i) {
+            uint8_t value = Rfid_ReadReg(RFID_REG_FIFO_DATA);
+            if (i < store_count) {
+                back_data[i] = value;
+            }
         }
 
-        for (i = 0U; i < fifo_level; ++i) {
-            back_data[i] = Rfid_ReadReg(RFID_REG_FIFO_DATA);
+        if (store_count < fifo_count) {
+            Rfid_DebugOverflow("tocard", fifo_count, back_capacity, *back_bits);
+            return RFID_STATUS_ERROR;
         }
     }
 
@@ -241,7 +296,7 @@ static RfidStatus_t Rfid_Request(uint8_t req_mode, uint8_t *tag_type)
     uint16_t back_bits = 0U;
 
     Rfid_WriteReg(RFID_REG_BIT_FRAMING, 0x07U);
-    return (Rfid_ToCard(RFID_CMD_TRANSCEIVE, &req_mode, 1U, tag_type, &back_bits) == RFID_STATUS_OK &&
+    return (Rfid_ToCard(RFID_CMD_TRANSCEIVE, &req_mode, 1U, tag_type, 2U, &back_bits) == RFID_STATUS_OK &&
             back_bits == 0x10U)
                ? RFID_STATUS_OK
                : RFID_STATUS_NO_TAG;
@@ -255,7 +310,7 @@ static RfidStatus_t Rfid_Anticoll(uint8_t *uid)
     uint16_t back_bits = 0U;
 
     Rfid_WriteReg(RFID_REG_BIT_FRAMING, 0x00U);
-    if (Rfid_ToCard(RFID_CMD_TRANSCEIVE, buffer, sizeof(buffer), uid, &back_bits) != RFID_STATUS_OK) {
+    if (Rfid_ToCard(RFID_CMD_TRANSCEIVE, buffer, sizeof(buffer), uid, 5U, &back_bits) != RFID_STATUS_OK) {
         return RFID_STATUS_NO_TAG;
     }
 

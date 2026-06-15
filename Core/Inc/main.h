@@ -99,6 +99,8 @@ void Error_Handler(void);
 #define AIN2_R_GPIO_Port GPIOC
 #define BIN1_L_Pin GPIO_PIN_0
 #define BIN1_L_GPIO_Port GPIOD
+#define BIN1_R_Pin GPIO_PIN_1
+#define BIN1_R_GPIO_Port GPIOB
 #define X3_Pin GPIO_PIN_1
 #define X3_GPIO_Port GPIOD
 #define X4_Pin GPIO_PIN_2

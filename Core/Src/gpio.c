@@ -53,16 +53,23 @@ void MX_GPIO_Init(void)
   __HAL_RCC_GPIOD_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOE, BUZZER_IN_Pin|STBY_L_Pin|BIN2_L_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOE, BUZZER_IN_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOE, STBY_L_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, DS18B20_DQ_Pin|STBY_R_Pin|BIN2_R_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, DS18B20_DQ_Pin|BIN2_R_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, AIN1_L_Pin|AIN1_R_Pin|Trig_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(BIN2_L_GPIO_Port, BIN2_L_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOC, AIN2_L_Pin|AIN2_R_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(STBY_R_GPIO_Port, STBY_R_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(BIN1_L_GPIO_Port, BIN1_L_Pin, GPIO_PIN_RESET);
@@ -96,8 +103,8 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(DS18B20_DQ_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : AIN1_L_Pin AIN1_R_Pin Trig_Pin */
-  GPIO_InitStruct.Pin = AIN1_L_Pin|AIN1_R_Pin|Trig_Pin;
+  /*Configure GPIO pins : AIN1_L_Pin AIN1_R_Pin Trig_Pin BIN1_R_Pin */
+  GPIO_InitStruct.Pin = AIN1_L_Pin|AIN1_R_Pin|Trig_Pin|BIN1_R_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;

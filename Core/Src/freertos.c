@@ -26,6 +26,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "Ctrl.h"
+#include "runtime_diag.h"
 
 /* USER CODE END Includes */
 
@@ -53,7 +54,7 @@ volatile uint32_t task_run_count[10] = {0};
 osThreadId_t LedTaskHandle;
 const osThreadAttr_t LedTask_attributes = {
   .name = "LedTask",
-  .stack_size = 128 * 4,
+  .stack_size = 256 * 4,
   .priority = (osPriority_t) osPriorityLow,
 };
 /* Definitions for UartTask */
@@ -95,7 +96,7 @@ const osThreadAttr_t DriverTask_attributes = {
 osThreadId_t CtrlTaskHandle;
 const osThreadAttr_t CtrlTask_attributes = {
   .name = "CtrlTask",
-  .stack_size = 256 * 4,
+  .stack_size = 512 * 4,
   .priority = (osPriority_t) osPriorityNormal,
 };
 /* Definitions for myRfidTask */
@@ -109,7 +110,7 @@ const osThreadAttr_t myRfidTask_attributes = {
 osThreadId_t WifiTaskHandle;
 const osThreadAttr_t WifiTask_attributes = {
   .name = "WifiTask",
-  .stack_size = 256 * 4,
+  .stack_size = 512 * 4,
   .priority = (osPriority_t) osPriorityLow,
 };
 /* Definitions for LEDFlash */
@@ -160,6 +161,20 @@ extern void StartWifiTask(void *argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
+/* Hook prototypes */
+void vApplicationStackOverflowHook(xTaskHandle xTask, signed char *pcTaskName);
+
+/* USER CODE BEGIN 4 */
+void vApplicationStackOverflowHook(xTaskHandle xTask, signed char *pcTaskName)
+{
+   /* Run time stack overflow checking is performed if
+   configCHECK_FOR_STACK_OVERFLOW is defined to 1 or 2. This hook function is
+   called if a stack overflow is detected. */
+   (void)xTask;
+   RuntimeDiag_OnStackOverflow((const char *)pcTaskName);
+}
+/* USER CODE END 4 */
+
 /**
   * @brief  FreeRTOS initialization
   * @param  None
@@ -202,7 +217,9 @@ void MX_FREERTOS_Init(void) {
   MotorActionHandle = osMessageQueueNew (16, 12, &MotorAction_attributes);
 
   /* USER CODE BEGIN RTOS_QUEUES */
-  /* add queues, ... */
+  if (MotorActionHandle == NULL) {
+    RuntimeDiag_AssertFailed(__FILE__, __LINE__);
+  }
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
@@ -263,15 +280,5 @@ __weak void StartLedTask(void *argument)
 
 /* Private application code --------------------------------------------------*/
 /* USER CODE BEGIN Application */
-
-void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName)
-{
-  (void)xTask;
-  (void)pcTaskName;
-  for (;;)
-  {
-  }
-}
-
 /* USER CODE END Application */
 

@@ -48,10 +48,10 @@ void Motor_SetDirection(MotorIdTypeDef motor, MotorDirTypeDef dir)
         in2_port = AIN2_L_GPIO_Port;
         in2_pin = AIN2_L_Pin;
     } else {
-        in1_port = AIN1_R_GPIO_Port;
-        in1_pin = AIN1_R_Pin;
-        in2_port = AIN2_R_GPIO_Port;
-        in2_pin = AIN2_R_Pin;
+        in1_port = BIN1_R_GPIO_Port;
+        in1_pin = BIN1_R_Pin;
+        in2_port = BIN2_R_GPIO_Port;
+        in2_pin = BIN2_R_Pin;
     }
 
     if (dir == MOTOR_FORWARD) {
@@ -70,8 +70,8 @@ void Motor_Stop(MotorIdTypeDef motor)
         HAL_GPIO_WritePin(AIN2_L_GPIO_Port, AIN2_L_Pin, GPIO_PIN_SET);
         __HAL_TIM_SET_COMPARE(&BOARD_LEFT_PWM_TIMER, BOARD_LEFT_PWM_CHANNEL, 0U);
     } else {
-        HAL_GPIO_WritePin(AIN1_R_GPIO_Port, AIN1_R_Pin, GPIO_PIN_SET);
-        HAL_GPIO_WritePin(AIN2_R_GPIO_Port, AIN2_R_Pin, GPIO_PIN_SET);
+        HAL_GPIO_WritePin(BIN1_R_GPIO_Port, BIN1_R_Pin, GPIO_PIN_SET);
+        HAL_GPIO_WritePin(BIN2_R_GPIO_Port, BIN2_R_Pin, GPIO_PIN_SET);
         __HAL_TIM_SET_COMPARE(&BOARD_RIGHT_PWM_TIMER, BOARD_RIGHT_PWM_CHANNEL, 0U);
     }
 }
