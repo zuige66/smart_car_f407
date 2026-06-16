@@ -1,126 +1,32 @@
-# smart_car_f407
+# smart_car — STM32F407 智能巡检小车
 
-基于 `STM32F407VET6` 的智能小车控制工程，使用 `STM32CubeMX + HAL + FreeRTOS + CMake` 开发。  
-本项目由旧工程 `clion_car (STM32F103)` 迁移到新工程 `smart_car (STM32F407)`，并按当前硬件重新适配了引脚、外设和任务结构。
+STM32F407VET6 + FreeRTOS + ESP8266 WiFi 遥控智能小车。  
+由旧工程 `clion_car (STM32F103)` 迁移而来，按实际硬件重新适配。
 
-## 1. 项目概况
+## 功能
 
-- 主控：`STM32F407VET6`
-- 外部晶振：`8 MHz`
-- 系统主频：`168 MHz`
-- 开发方式：`STM32CubeMX + CMake`
-- RTOS：`FreeRTOS CMSIS V2`
+- **循迹** — 4 路红外 + PID 转向 (Kp=95, Ki=8, Kd=20)
+- **避障** — 11 状态超声波避障，自动绕行较宽侧
+- **温度分级响应** — 29°C 预警 / 30°C 降速 / 31°C 紧急返航
+- **RFID 定位** — RC522 识别 8 个点位 (start / place_1~6 / end_stop)，遇点位停车测量 3s
+- **WiFi 遥测** — 每 3s 上报 JSON（含温度、湿度、距离、循迹、RFID 位置、状态）
+- **手机遥控** — TCP 命令：idle / start_patrol / evacuate / return_home 等
+- **OLED 显示** — 双页面循环：状态 + 传感器数据
+- **ESP 桥接** — 调试串口透传 ESP8266 AT 指令
 
-## 2. 当前功能
-
-- OLED 状态显示（IDLE / PATROL / T_WARN / T_ALARM / EVACUATE / RET_HOME）
-- 6 状态状态机（idle → start_patrol → temp_warning → temp_alarm → evacuate → return_home）
-- 温度预警防抖（5s 保持）
-- 串口调试通信 `USART2`
-- WiFi 遥测上报 + 命令接收 `USART3`
-- RFID 标签识别 `SPI1 + EXTI7`（8 个定位点 + 终点掉头）
-- 超声波测距 `TIM1`
-- 循迹传感器采集
-- MLX90614 红外测温
-- MQ8 / MG8 气体传感器采集
-- 电机驱动与控制任务
-
-## 3. 主要外设分配
-
-- `USART2`
-  - 调试串口
-  - `PA2 -> TX`
-  - `PA3 -> RX`
-- `USART3`
-  - WiFi 模块串口
-  - `PC10 -> TX`
-  - `PC11 -> RX`
-- `I2C1`
-  - `MLX90614`
-- `I2C2`
-  - 预留 / AHT20
-- `I2C3`
-  - OLED
-  - 当前配置为 `Fast Mode`
-- `SPI1`
-  - RFID / RC522
-  - `PA5 -> SCK`
-  - `PA6 -> MISO`
-  - `PA7 -> MOSI`
-- `PD3`
-  - RFID 片选 `SDA/CS`
-- `PD7`
-  - RFID 中断 `EXTI7`
-- `PC1`
-  - `MG8_AO / ADC1_IN11`
-
-## 4. 任务结构
-
-- `UartTask`
-  - 调试串口接收与命令解析
-- `OledTask`
-  - OLED 周期刷新显示
-- `SensorTask`
-  - 传感器采集
-- `HCSR04Task`
-  - 超声波测距
-- `DriverTask`
-  - 电机动作输出
-- `CtrlTask`
-  - 状态机与控制逻辑
-- `RfidTask`
-  - RFID 轮询 / 中断处理
-  - 8 个标签位置映射（start / place_1~6 / end_stop）
-- `WifiTask`
-  - WiFi 收发与协议处理
-  - 每 3s 自动上报 JSON 遥测（含 rfid_loc + state）
-  - 支持 12 条命令：idle / start_patrol / temp_warning / temp_alarm / evacuate / return_home / emergency_stop / pause / manual_reset / start / stop / ping / status / hello
-
-## 5. 启动调试信息
-
-当前工程上电后会先输出最小启动探针：
-
-```text
-BOOT USART2
-BOOT USART3
-```
-
-随后进入任务初始化，`USART2` 会输出调试任务启动日志，便于快速判断：
-
-- 系统是否启动
-- 串口是否连通
-- 当前观察的是 `USART2` 还是 `USART3`
-
-## 6. 编译方式
-
-在项目根目录执行：
+## 快速开始
 
 ```powershell
 cmake --build --preset Debug
 ```
 
-生成产物位于：
+产物：`build/Debug/smart_car.elf`
 
-```text
-build/Debug/
-```
+## WiFi 连接
 
-## 7. 调试说明
+AP: `SmartCar_F407` / `12345678` → TCP `192.168.4.1:8080`
 
-- 推荐使用 `USART2` 作为主调试串口
-- 串口参数：
-  - `115200`
-  - `8N1`
-- 如果修改了 CubeMX 配置，务必复查以下文件是否被回退：
-  - `Core/Src/stm32f4xx_hal_timebase_tim.c`
-  - `Core/Src/stm32f4xx_it.c`
-  - `Core/Inc/stm32f4xx_it.h`
-  - `Core/Src/system_stm32f4xx.c`
+## 文档
 
-## 8. 相关文档
-
-- `CURRENT_CONFIG.md`
-  - 当前工程配置说明
-- `PORTING_DIFF.md`
-  - 从 `STM32F103` 迁移到 `STM32F407` 后的差异说明
-
+- **[CURRENT_CONFIG.md](CURRENT_CONFIG.md)** — 完整技术参考（引脚映射、任务表、状态机、协议等）
+- **[PORTING_DIFF.md](PORTING_DIFF.md)** — 从 STM32F103 迁移到 STM32F407 的差异说明
