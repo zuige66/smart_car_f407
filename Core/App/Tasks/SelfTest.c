@@ -127,15 +127,19 @@ static uint8_t SelfTest_HCSR04(void)
 
 static uint8_t SelfTest_Motor(void)
 {
-    if (BOARD_LEFT_PWM_TIMER.Instance == NULL || BOARD_RIGHT_PWM_TIMER.Instance == NULL) {
+    if (htim3.Instance == NULL || htim4.Instance == NULL) {
         return SELFTEST_FAIL;
     }
 
     Board_MotorStandbySet(1U);
-    HAL_TIM_PWM_Start(&BOARD_LEFT_PWM_TIMER, BOARD_LEFT_PWM_CHANNEL);
-    HAL_TIM_PWM_Start(&BOARD_RIGHT_PWM_TIMER, BOARD_RIGHT_PWM_CHANNEL);
-    __HAL_TIM_SET_COMPARE(&BOARD_LEFT_PWM_TIMER, BOARD_LEFT_PWM_CHANNEL, 0U);
-    __HAL_TIM_SET_COMPARE(&BOARD_RIGHT_PWM_TIMER, BOARD_RIGHT_PWM_CHANNEL, 0U);
+    HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_2);
+    HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_3);
+    HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
+    HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);
+    __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2, 0U);
+    __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3, 0U);
+    __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 0U);
+    __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 0U);
 
     return SELFTEST_PASS;
 }

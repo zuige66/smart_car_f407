@@ -212,9 +212,21 @@ void StartCtrlTask(void *argument)
             break;
         case STATE_THERMAL_ALERT:
             cmd = ThermalCtrl_Alert(&data, TrackCtrl_Run(&data));
+            {
+                MotorCmd_t obs_cmd = ObstacleCtrl_Run(&data);
+                if (obs_cmd.cmd != MOTOR_CMD_STOP || !ObstacleCtrl_IsDone()) {
+                    cmd = obs_cmd;
+                }
+            }
             break;
         case STATE_THERMAL_WARNING:
             cmd = ThermalCtrl_Warning(&data, TrackCtrl_Run(&data));
+            {
+                MotorCmd_t obs_cmd = ObstacleCtrl_Run(&data);
+                if (obs_cmd.cmd != MOTOR_CMD_STOP || !ObstacleCtrl_IsDone()) {
+                    cmd = obs_cmd;
+                }
+            }
             break;
         case STATE_EMERGENCY:
             cmd = ThermalCtrl_Emergency(&data);
