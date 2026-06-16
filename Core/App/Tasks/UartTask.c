@@ -1,3 +1,9 @@
+/**
+ * @file UartTask.c
+ * @brief UART命令处理任务实现
+ * @details 处理串口命令输入，支持系统控制命令和ESP8266桥接模式
+ */
+
 #include <string.h>
 
 #include "cmsis_os2.h"
@@ -10,27 +16,54 @@
 
 extern volatile uint32_t task_run_count[];
 
-static uint8_t rx_byte;
-static uint8_t rx_buf[32];
-static volatile uint8_t rx_idx = 0U;
-static volatile uint8_t cmd_ready = 0U;
-static volatile uint32_t last_rx_time = 0U;
-static uint8_t esp_bridge_plus_count = 0U;
-static uint8_t esp_bridge_skip_lf = 0U;
-static char esp_bridge_line[96];
-static uint8_t esp_bridge_line_len = 0U;
+static uint8_t rx_byte;                     /* 接收字节 */
+static uint8_t rx_buf[32];                  /* 接收缓冲区 */
+static volatile uint8_t rx_idx = 0U;         /* 接收索引 */
+static volatile uint8_t cmd_ready = 0U;      /* 命令就绪标志 */
+static volatile uint32_t last_rx_time = 0U;  /* 上次接收时间 */
+static uint8_t esp_bridge_plus_count = 0U;   /* ESP桥接模式+++计数 */
+static uint8_t esp_bridge_skip_lf = 0U;     /* ESP桥接模式跳过LF标志 */
+static char esp_bridge_line[96];            /* ESP桥接模式行缓冲区 */
+static uint8_t esp_bridge_line_len = 0U;    /* ESP桥接模式行长度 */
 
+/**
+ * @brief 发送文本到串口
+ * @param text 要发送的文本
+ */
 static void Uart_SendText(const char *text)
 {
     HAL_UART_Transmit(&BOARD_DEBUG_UART, (uint8_t *)text, (uint16_t)strlen(text), 100U);
 }
 
+/**
+ * @brief 处理串口命令
+ * @param cmd 命令字符串
+ */
 static void Uart_ProcessCommand(const char *cmd)
 {
     if (strcmp(cmd, "start") == 0) {
         Ctrl_Start();
 #if UARTTASK_VERBOSE_LOG
         Uart_SendText("[CMD] System START\r\n");
+#endif
+    } else if (strcmp(cmd, "pause") == 0 || strcmp(cmd, "emergency_stop") == 0) {
+        Ctrl_Stop();
+#if UARTTASK_VERBOSE_LOG
+        Uart_SendText("[CMD] System STANDBY\r\n");
+#endif
+    } else if (strcmp(cmd, "evacuate") == 0) {
+        Ctrl_RequestEmergency();
+#if UARTTASK_VERBOSE_LOG
+        Uart_SendText("[CMD] System EMERGENCY\r\n");
+#endif
+    } else if (strcmp(cmd, "return_home") == 0) {
+        Ctrl_Start();
+#if UARTTASK_VERBOSE_LOG
+        Uart_SendText("[CMD] System RETURN_HOME -> PATROL\r\n");
+#endif
+    } else if (strcmp(cmd, "manual_reset") == 0) {
+#if UARTTASK_VERBOSE_LOG
+        Uart_SendText("[CMD] manual_reset ignored\r\n");
 #endif
     } else if (strcmp(cmd, "stop") == 0) {
         Ctrl_Stop();
@@ -58,6 +91,10 @@ static void Uart_ProcessCommand(const char *cmd)
     }
 }
 
+/**
+ * @brief 将字节转发到ESP8266
+ * @param byte 要转发的字节
+ */
 static void Uart_ForwardByteToEsp(uint8_t byte)
 {
     if (byte == '\n' && esp_bridge_skip_lf) {
@@ -118,6 +155,10 @@ static void Uart_ForwardByteToEsp(uint8_t byte)
     }
 }
 
+/**
+ * @brief UART命令处理任务入口函数
+ * @param argument 任务参数（未使用）
+ */
 void StartUartTask(void *argument)
 {
     (void)argument;
@@ -183,6 +224,10 @@ void StartUartTask(void *argument)
     }
 }
 
+/**
+ * @brief UART接收完成回调函数
+ * @param huart UART句柄
+ */
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
     if (huart->Instance == USART2) {

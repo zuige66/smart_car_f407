@@ -13,10 +13,12 @@
 
 ## 2. 当前功能
 
-- OLED 状态显示
+- OLED 状态显示（IDLE / PATROL / T_WARN / T_ALARM / EVACUATE / RET_HOME）
+- 6 状态状态机（idle → start_patrol → temp_warning → temp_alarm → evacuate → return_home）
+- 温度预警防抖（5s 保持）
 - 串口调试通信 `USART2`
-- WiFi 通信任务 `USART3`
-- RFID 识别任务 `SPI1 + EXTI7`
+- WiFi 遥测上报 + 命令接收 `USART3`
+- RFID 标签识别 `SPI1 + EXTI7`（8 个定位点 + 终点掉头）
 - 超声波测距 `TIM1`
 - 循迹传感器采集
 - MLX90614 红外测温
@@ -68,8 +70,11 @@
   - 状态机与控制逻辑
 - `RfidTask`
   - RFID 轮询 / 中断处理
+  - 8 个标签位置映射（start / place_1~6 / end_stop）
 - `WifiTask`
   - WiFi 收发与协议处理
+  - 每 3s 自动上报 JSON 遥测（含 rfid_loc + state）
+  - 支持 12 条命令：idle / start_patrol / temp_warning / temp_alarm / evacuate / return_home / emergency_stop / pause / manual_reset / start / stop / ping / status / hello
 
 ## 5. 启动调试信息
 

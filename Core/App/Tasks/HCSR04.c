@@ -1,3 +1,9 @@
+/**
+ * @file HCSR04.c
+ * @brief HCSR04超声波测距模块驱动
+ * @details 使用定时器测量超声波往返时间，计算距离
+ */
+
 #include <stdio.h>
 #include <string.h>
 
@@ -25,11 +31,21 @@ static volatile uint8_t g_hcsr04_last_valid_count = 0U;
 static volatile uint8_t g_hcsr04_last_echo_level = 0U;
 static volatile uint8_t g_hcsr04_last_timeout_stage = 0U;
 
+/**
+ * @brief 获取定时器当前计数值
+ * @return 当前计数值
+ */
 static uint16_t HCSR04_TimerNow(void)
 {
     return (uint16_t)__HAL_TIM_GET_COUNTER(&htim1);
 }
 
+/**
+ * @brief 计算定时器时间差(微秒)
+ * @param start 起始计数值
+ * @param end 结束计数值
+ * @return 时间差(微秒)
+ */
 static uint32_t HCSR04_ElapsedUs(uint16_t start, uint16_t end)
 {
     if (end >= start) {
@@ -38,6 +54,10 @@ static uint32_t HCSR04_ElapsedUs(uint16_t start, uint16_t end)
     return (uint32_t)(0x10000UL - start + end);
 }
 
+/**
+ * @brief 微秒级延时
+ * @param us 延时微秒数
+ */
 static void HCSR04_DelayUs(uint16_t us)
 {
     uint16_t start = HCSR04_TimerNow();
@@ -45,6 +65,10 @@ static void HCSR04_DelayUs(uint16_t us)
     }
 }
 
+/**
+ * @brief 读取超声波脉冲宽度
+ * @return 脉冲宽度(微秒)，0表示超时
+ */
 static uint32_t HCSR04_ReadPulseUs(void)
 {
     uint16_t start = HCSR04_TimerNow();
@@ -70,6 +94,9 @@ static uint32_t HCSR04_ReadPulseUs(void)
 }
 
 #if HCSR04_VERBOSE_LOG
+/**
+ * @brief 打印超声波调试信息
+ */
 static void HCSR04_DebugPrint(void)
 {
     char buf[160];
@@ -92,6 +119,12 @@ static void HCSR04_DebugPrint(void)
 }
 #endif
 
+/**
+ * @brief 计算裁剪平均值(去除最大最小值)
+ * @param samples 样本数组
+ * @param valid_count 有效样本数
+ * @return 裁剪平均值
+ */
 static float HCSR04_TrimmedAverage(float *samples, uint8_t valid_count)
 {
     uint8_t i;
@@ -121,6 +154,10 @@ static float HCSR04_TrimmedAverage(float *samples, uint8_t valid_count)
     return sum / (float)valid_count;
 }
 
+/**
+ * @brief HCSR04超声波测距任务入口函数
+ * @param argument 任务参数（未使用）
+ */
 void StartHCSR04Task(void *argument)
 {
     float samples[HCSR04_SAMPLES];

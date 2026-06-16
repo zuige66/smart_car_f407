@@ -1,8 +1,21 @@
+/**
+  ******************************************************************************
+  * @file    stm32f4xx_hal_timebase_tim_user.c
+  * @brief   HAL时间基准定时器实现
+  *          使用TIM8作为HAL库的时间基准，提供1ms的系统滴答
+  ******************************************************************************
+  */
+
 #include "stm32f4xx_hal.h"
 #include "stm32f4xx_hal_tim.h"
 
 TIM_HandleTypeDef htim8;
 
+/**
+ * @brief 初始化HAL时间基准定时器
+ * @param TickPriority 滴答中断优先级
+ * @return HAL状态
+ */
 HAL_StatusTypeDef HAL_InitTick(uint32_t TickPriority)
 {
     RCC_ClkInitTypeDef clkconfig;

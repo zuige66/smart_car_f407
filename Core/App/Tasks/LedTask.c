@@ -1,3 +1,9 @@
+/**
+ * @file LedTask.c
+ * @brief LED状态指示任务实现
+ * @details 控制状态LED闪烁，指示系统运行状态
+ */
+
 #include <stdio.h>
 #include <string.h>
 
@@ -12,6 +18,10 @@ extern osMessageQueueId_t LEDFlashHandle;
 extern volatile uint32_t task_run_count[];
 
 #if LEDTASK_VERBOSE_LOG
+/**
+ * @brief 打印LED任务调试信息
+ * @param flash_count 闪烁计数
+ */
 static void LedTask_DebugAlive(uint32_t flash_count)
 {
     char buf[64];
@@ -32,6 +42,10 @@ static void LedTask_DebugAlive(uint32_t flash_count)
 }
 #endif
 
+/**
+ * @brief LED状态指示任务入口函数
+ * @param argument 任务参数（未使用）
+ */
 void StartLedTask(void *argument)
 {
     uint32_t flash_count = 0U;

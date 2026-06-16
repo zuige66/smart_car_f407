@@ -1,12 +1,30 @@
+/**
+  ******************************************************************************
+  * @file    motor.c
+  * @brief   电机驱动模块实现
+  *          使用TB6612FNG双H桥驱动芯片控制左右电机
+  ******************************************************************************
+  */
+
 #include "motor.h"
 
 #include "board_compat.h"
 
+/**
+ * @brief 获取定时器周期值
+ * @param htim 定时器句柄
+ * @return 定时器周期(ARR+1)
+ */
 static uint32_t Motor_GetTimerPeriod(TIM_HandleTypeDef *htim)
 {
     return __HAL_TIM_GET_AUTORELOAD(htim) + 1U;
 }
 
+/**
+ * @brief 设置单侧电机的PWM值
+ * @param motor 电机ID
+ * @param pwm_val PWM比较值
+ */
 static void Motor_SetSidePwm(MotorIdTypeDef motor, uint32_t pwm_val)
 {
     if (motor == MOTOR_LEFT) {
@@ -18,6 +36,10 @@ static void Motor_SetSidePwm(MotorIdTypeDef motor, uint32_t pwm_val)
     }
 }
 
+/**
+ * @brief 初始化电机驱动器
+ * @note 启用电机电源，启动PWM定时器，停止电机
+ */
 void MotorDriver_Init(void)
 {
     Board_MotorStandbySet(1U);
@@ -29,6 +51,12 @@ void MotorDriver_Init(void)
     Motor_Stop(MOTOR_RIGHT);
 }
 
+/**
+ * @brief 设置电机速度
+ * @param motor 电机ID
+ * @param speed 速度值(0-1000)
+ * @note 将速度值(0-1000)转换为实际的PWM比较值
+ */
 void Motor_SetSpeed(MotorIdTypeDef motor, uint16_t speed)
 {
     uint32_t timer_period;
@@ -44,6 +72,12 @@ void Motor_SetSpeed(MotorIdTypeDef motor, uint16_t speed)
     Motor_SetSidePwm(motor, pwm_val);
 }
 
+/**
+ * @brief 设置电机方向
+ * @param motor 电机ID
+ * @param dir 方向
+ * @note 通过控制H桥的IN引脚设置电机转向
+ */
 void Motor_SetDirection(MotorIdTypeDef motor, MotorDirTypeDef dir)
 {
     if (motor == MOTOR_LEFT) {
@@ -73,6 +107,11 @@ void Motor_SetDirection(MotorIdTypeDef motor, MotorDirTypeDef dir)
     }
 }
 
+/**
+ * @brief 停止电机(刹车)
+ * @param motor 电机ID
+ * @note 将H桥的所有IN引脚置高实现刹车
+ */
 void Motor_Stop(MotorIdTypeDef motor)
 {
     if (motor == MOTOR_LEFT) {

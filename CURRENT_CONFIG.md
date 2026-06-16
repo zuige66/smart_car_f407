@@ -135,19 +135,11 @@ cmake --build --preset Debug
 - `CMakeLists.txt`
 - `smart_car.ioc`
 
-## 6. 当前仍为占位实现的模块
-
-下面这些模块目前能编译，但还不是完整硬件实现：
+## 6. 当前为占位实现的模块
 
 - `BatteryCtrl`
   - 当前返回固定电量、电压
   - 低电量返航逻辑未实现
-
-- `WifiComm`
-  - WiFi 初始化、上报、告警、命令接收未实现
-
-- `RfidReader`
-  - RFID 检测与读卡未实现
 
 - `Encoder`
   - 当前仍为桩实现
@@ -157,6 +149,149 @@ cmake --build --preset Debug
 - `LedTask`
   - 当前 `BOARD_HAS_STATUS_LED = 0`
   - 软件任务保留，但没有映射实际状态灯
+
+## 7. 状态机
+
+### 7.1 状态列表
+
+| 代码 enum | WiFi JSON state | OLED 显示 | 触发条件 |
+|---|---|---|---|
+| `STATE_STANDBY` | `idle` | `IDLE` | 未启动 / `stop` 命令 |
+| `STATE_PATROL` | `start_patrol` | `PATROL` | 已启动，温度 < 29°C |
+| `STATE_THERMAL_ALERT` | `temp_warning` | `T_WARN` | 温度 ≥ 29°C |
+| `STATE_THERMAL_WARNING` | `temp_alarm` | `T_ALARM` | 温度 ≥ 30°C |
+| `STATE_EMERGENCY` | `evacuate` | `EVACUATE` | 温度 ≥ 31°C |
+| `STATE_LOW_BATTERY` | `return_home` | `RET_HOME` | 终点 RFID 触发（掉头 1.5s） |
+
+### 7.2 温度阈值防抖
+
+任意预警状态（T_WARN / T_ALARM / EVACUATE）回到 `start_patrol` 前，强制保持 **5 秒**：
+
+```
+温度 30°C → state = "temp_alarm"
+温度 24°C → state = "temp_alarm"  (保持5秒)
+          → state = "start_patrol" (5秒后)
+```
+
+预警之间升级/降级无延迟（如 T_WARN → T_ALARM 立即切换）。
+
+## 8. WiFi 通信协议（USART3 → ESP8266）
+
+### 8.1 连接信息
+
+- SSID: `SmartCar_F407`
+- 密码: `12345678`
+- TCP 端口: `8080`
+- IP: `192.168.4.1`
+
+### 8.2 小车 → 上位机（遥测）
+
+每 3 秒自动发送一次，格式：
+
+```json
+{"type":"telemetry","MQ8":<xx.x>,"AHT_temp":<xx.x>,"AHT_hum":<xx.x>,"dist":<xx.x>,"track":<0-15>,"track_bin":"<4位二进制>","rfid_loc":"<位置名>","state":"<状态名>"}
+```
+
+字段说明：
+
+| 字段 | 说明 |
+|---|---|
+| `MQ8` | 气体传感器 ADC 值 |
+| `AHT_temp` | 温度 |
+| `AHT_hum` | 湿度 |
+| `dist` | 超声波距离 cm |
+| `track` | 循迹传感器值 0-15 |
+| `track_bin` | 循迹二进制串，如 `"1010"` |
+| `rfid_loc` | RFID 当前位置名 |
+| `state` | 小车当前状态 |
+
+`rfid_loc` 会缓存最近一次非 `unknown` 的值，防止采样间隙漏掉点位。
+
+### 8.3 上位机 → 小车（命令 & Ack）
+
+上位机发送命令字符串，小车回复 Ack JSON：
+
+| 发送命令 | 小车动作 | Ack JSON `result` |
+|---|---|---|
+| `idle` | 停车 | `"idle"` |
+| `start_patrol` | 开始巡检 | `"start_patrol"` |
+| `pause` | 停车 | `"idle"` |
+| `stop` | 停车（兼容旧名） | `"idle"` |
+| `start` | 开始巡检（兼容旧名） | `"start_patrol"` |
+| `emergency_stop` | 紧急停车 | `"evacuate"` |
+| `evacuate` | 紧急撤离 | `"evacuate"` |
+| `return_home` | 开始巡检 | `"return_home"` |
+| `temp_warning` | 仅回应（无动作） | `"temp_warning"` |
+| `temp_alarm` | 仅回应（无动作） | `"temp_alarm"` |
+| `manual_reset` | 仅回应 | `"ignored"` |
+| `ping` / `hello` | 心跳 | `"pong"` |
+| `status` | 查询当前状态 | `"<当前状态名>"` |
+
+Ack 格式：
+
+```json
+{"type":"ack","cmd":"<收到的命令>","result":"<结果>"}
+```
+
+未识别的命令返回 `{"type":"ack","cmd":"unknown","result":"ignored"}`。
+
+## 9. RFID-RC522
+
+### 9.1 引脚连接
+
+| RC522 | STM32 | 功能 |
+|---|---|---|
+| SCK | PA5 | SPI1_SCK |
+| MOSI | PA7 | SPI1_MOSI |
+| MISO | PA6 | SPI1_MISO |
+| SDA (CS) | PD3 | 片选（低电平有效） |
+| IRQ | PD7 | EXTI 上升沿中断 |
+| 3.3V | 3.3V | 供电 |
+| GND | GND | 地 |
+
+### 9.2 SPI 配置
+
+- SPI1, Master, 8bit, CPOL=0/CPHA=0 (Mode 0)
+- 波特率预分频：初始化 2（84MHz），RFID 初始化时重配为 16（~10.5MHz）
+- 软件 NSS（PD3 GPIO 控制片选）
+
+### 9.3 标签 ID 映射
+
+| 压缩 ID | 位置名 | 行为 |
+|---|---|---|
+| 58 | `start` | 开始巡检（`Ctrl_Start()`） |
+| 53 | `place_1` | 停车测数据 3 秒 → 发送遥测 → 继续 |
+| 78 | `place_2` | 同上 |
+| 199 | `place_3` | 同上 |
+| 95 | `place_4` | 同上 |
+| 86 | `place_5` | 同上 |
+| 111 | `place_6` | 同上 |
+| 228 | `end_stop` | 掉头 1.5s → 继续巡检（返航回桩） |
+
+### 9.4 串口调试输出
+
+```
+[RFID] NEW TAG  UID=90:7C:A6:02  id=58 loc=start
+[CTRL] RFID id=58 loc=start
+[CTRL] -> START patrolling
+
+[RFID] NEW TAG  UID=70:7E:A6:02  id=53 loc=place_1
+[CTRL] RFID id=53 loc=place_1
+[CTRL] -> MEASURE 3s at place_1
+[CTRL] Measuring 1/3s  dist=12.3 temp=28.5
+[CTRL] Measure done, send data via WiFi
+
+[RFID] NEW TAG  UID=60:80:A6:02  id=228 loc=end_stop
+[CTRL] RFID id=228 loc=end_stop
+[CTRL] -> RETURN HOME spin 180
+[CTRL] Return home done, resume patrol
+```
+
+### 9.5 读取机制
+
+- FreeRTOS 任务 `myRfidTask`（优先级 Low，栈 1024B）
+- 轮询间隔 200ms + EXTI 中断（PD7 上升沿）触发快速响应
+- 连续 3 次读不到标签 → 视为标签已离开
 
 ## 7. 最后一轮检查结论
 

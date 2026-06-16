@@ -1,3 +1,9 @@
+/**
+ * @file DriverTask.c
+ * @brief 电机驱动任务实现
+ * @details 接收电机控制命令并执行相应的电机动作（前进、后退、转向、停止等）
+ */
+
 #include <stdio.h>
 #include <string.h>
 
@@ -14,6 +20,11 @@ extern osMessageQueueId_t MotorActionHandle;
 extern volatile uint32_t task_run_count[];
 
 #if DRIVERTASK_VERBOSE_LOG
+/**
+ * @brief 获取电机命令名称
+ * @param cmd 电机命令类型
+ * @return 命令名称字符串
+ */
 static const char *Driver_CmdName(MotorCmdType cmd)
 {
     switch (cmd) {
@@ -34,11 +45,22 @@ static const char *Driver_CmdName(MotorCmdType cmd)
     }
 }
 
+/**
+ * @brief 读取GPIO引脚状态
+ * @param port GPIO端口
+ * @param pin GPIO引脚
+ * @return 引脚状态（1-高电平，0-低电平）
+ */
 static uint8_t Driver_ReadPin(GPIO_TypeDef *port, uint16_t pin)
 {
     return HAL_GPIO_ReadPin(port, pin) == GPIO_PIN_SET ? 1U : 0U;
 }
 
+/**
+ * @brief 打印电机调试信息
+ * @param cmd 当前电机命令
+ * @param timeout_count 超时计数
+ */
 static void Driver_DebugPrint(const MotorCmd_t *cmd, uint32_t timeout_count)
 {
     static char buf[320];
@@ -83,6 +105,10 @@ static void Driver_DebugPrint(const MotorCmd_t *cmd, uint32_t timeout_count)
 }
 #endif
 
+/**
+ * @brief 电机驱动任务入口函数
+ * @param argument 任务参数（未使用）
+ */
 void StartDriverTask(void *argument)
 {
     MotorCmd_t motor_cmd = {0};

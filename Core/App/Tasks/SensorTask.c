@@ -1,3 +1,9 @@
+/**
+ * @file SensorTask.c
+ * @brief 传感器数据采集任务实现
+ * @details 采集循迹传感器、温度传感器(AHT20/MLX90614)、MQ-8气体传感器数据
+ */
+
 #include <string.h>
 #include <stdio.h>
 
@@ -18,13 +24,13 @@ extern volatile uint32_t task_run_count[];
 #define MLX90614_REG_TA 0x06U
 #define MLX90614_REG_TOBJ1 0x07U
 
-volatile float g_mlx90614_ambient = 25.0f;
-volatile float g_mlx90614_object = 36.5f;
-volatile float g_aht20_temp = 25.0f;
-volatile float g_aht20_humidity = 50.0f;
-volatile uint16_t g_mq8_adc_raw = 0U;
-volatile uint8_t g_mq8_do = 0U;
-volatile uint8_t g_track_status = 0U;
+volatile float g_mlx90614_ambient = 25.0f;   /* MLX90614环境温度 */
+volatile float g_mlx90614_object = 36.5f;    /* MLX90614物体温度 */
+volatile float g_aht20_temp = 25.0f;          /* AHT20温度 */
+volatile float g_aht20_humidity = 50.0f;      /* AHT20湿度 */
+volatile uint16_t g_mq8_adc_raw = 0U;         /* MQ-8 ADC原始值 */
+volatile uint8_t g_mq8_do = 0U;               /* MQ-8数字输出 */
+volatile uint8_t g_track_status = 0U;         /* 循迹传感器状态 */
 
 static uint8_t Sensor_GetX1(void);
 static uint8_t Sensor_GetX2(void);
@@ -32,6 +38,10 @@ static uint8_t Sensor_GetX3(void);
 static uint8_t Sensor_GetX4(void);
 
 #if SENSORTASK_VERBOSE_LOG
+/**
+ * @brief 打印循迹传感器原始数据
+ * @param status 循迹传感器状态
+ */
 static void Sensor_DebugTrackRaw(uint8_t status)
 {
     static uint32_t last_print_tick = 0U;
@@ -62,6 +72,10 @@ static void Sensor_DebugTrackRaw(uint8_t status)
 }
 #endif
 
+/**
+ * @brief 读取MQ-8传感器ADC值
+ * @return ADC原始值
+ */
 static uint16_t Sensor_ReadMq8Adc(void)
 {
     uint16_t value = 0U;
@@ -76,6 +90,12 @@ static uint16_t Sensor_ReadMq8Adc(void)
     return value;
 }
 
+/**
+ * @brief 读取MLX90614寄存器
+ * @param reg 寄存器地址
+ * @param data 数据指针
+ * @return HAL状态
+ */
 static HAL_StatusTypeDef MLX90614_ReadReg(uint8_t reg, uint16_t *data)
 {
     uint8_t buf[3];
@@ -103,6 +123,12 @@ static HAL_StatusTypeDef MLX90614_ReadReg(uint8_t reg, uint16_t *data)
     return ret;
 }
 
+/**
+ * @brief 读取MLX90614温度
+ * @param reg 寄存器地址
+ * @param temp_c 温度值指针(°C)
+ * @return HAL状态
+ */
 static HAL_StatusTypeDef MLX90614_ReadTemp(uint8_t reg, float *temp_c)
 {
     uint16_t raw;
@@ -115,26 +141,46 @@ static HAL_StatusTypeDef MLX90614_ReadTemp(uint8_t reg, float *temp_c)
     return HAL_OK;
 }
 
+/**
+ * @brief 读取循迹传感器X1
+ * @return X1状态(1-检测到黑线，0-未检测)
+ */
 static uint8_t Sensor_GetX1(void)
 {
     return HAL_GPIO_ReadPin(X1_GPIO_Port, X1_Pin) == GPIO_PIN_RESET ? 0U : 1U;
 }
 
+/**
+ * @brief 读取循迹传感器X2
+ * @return X2状态(1-检测到黑线，0-未检测)
+ */
 static uint8_t Sensor_GetX2(void)
 {
     return HAL_GPIO_ReadPin(X2_GPIO_Port, X2_Pin) == GPIO_PIN_RESET ? 0U : 1U;
 }
 
+/**
+ * @brief 读取循迹传感器X3
+ * @return X3状态(1-检测到黑线，0-未检测)
+ */
 static uint8_t Sensor_GetX3(void)
 {
     return HAL_GPIO_ReadPin(X3_GPIO_Port, X3_Pin) == GPIO_PIN_RESET ? 0U : 1U;
 }
 
+/**
+ * @brief 读取循迹传感器X4
+ * @return X4状态(1-检测到黑线，0-未检测)
+ */
 static uint8_t Sensor_GetX4(void)
 {
     return HAL_GPIO_ReadPin(X4_GPIO_Port, X4_Pin) == GPIO_PIN_RESET ? 0U : 1U;
 }
 
+/**
+ * @brief 获取循迹传感器状态
+ * @return 4位状态值，bit0-X1, bit1-X2, bit2-X3, bit3-X4
+ */
 static uint8_t Sensor_GetTrackStatus(void)
 {
     uint8_t status = 0U;
@@ -145,6 +191,10 @@ static uint8_t Sensor_GetTrackStatus(void)
     return status;
 }
 
+/**
+ * @brief 传感器采集任务入口函数
+ * @param argument 任务参数（未使用）
+ */
 void StartSensorTask(void *argument)
 {
     float ambient = 25.0f;

@@ -1,3 +1,9 @@
+/**
+ * @file WifiTask.c
+ * @brief WiFi通信任务实现
+ * @details 初始化WiFi模块，处理WiFi通信任务循环
+ */
+
 #include <string.h>
 
 #include "cmsis_os2.h"
@@ -7,11 +13,19 @@
 
 extern volatile uint32_t task_run_count[];
 
+/**
+ * @brief WiFi调试文本输出（空实现）
+ * @param text 调试文本
+ */
 static void Wifi_DebugText(const char *text)
 {
-    HAL_UART_Transmit(&BOARD_DEBUG_UART, (uint8_t *)text, (uint16_t)strlen(text), 100U);
+    (void)text;
 }
 
+/**
+ * @brief WiFi通信任务入口函数
+ * @param argument 任务参数（未使用）
+ */
 void StartWifiTask(void *argument)
 {
     (void)argument;

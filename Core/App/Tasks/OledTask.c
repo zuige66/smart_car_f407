@@ -1,3 +1,9 @@
+/**
+ * @file OledTask.c
+ * @brief OLED显示任务实现
+ * @details 在OLED屏幕上显示系统状态、传感器数据等信息
+ */
+
 #include <stdio.h>
 #include "cmsis_os2.h"
 #include "Ctrl.h"
@@ -14,15 +20,25 @@ extern volatile uint8_t g_mq8_do;
 extern volatile uint8_t g_track_status;
 extern volatile uint32_t task_run_count[];
 
+/**
+ * @brief 系统状态名称映射表
+ */
 static const char *state_names[] = {
-    "STANDBY",
+    "IDLE",
     "PATROL",
-    "T_ALERT",
     "T_WARN",
-    "EMERG",
-    "LOW_BAT"
+    "T_ALARM",
+    "EVACUATE",
+    "RET_HOME"
 };
 
+/**
+ * @brief 限制显示数值范围
+ * @param value 输入值
+ * @param min_value 最小值
+ * @param max_value 最大值
+ * @return 限制后的数值
+ */
 static int Oled_ClampDisplayInt(int value, int min_value, int max_value)
 {
     if (value < min_value) {
@@ -34,6 +50,12 @@ static int Oled_ClampDisplayInt(int value, int min_value, int max_value)
     return value;
 }
 
+/**
+ * @brief 格式化十分位数值
+ * @param buf 输出缓冲区
+ * @param buf_size 缓冲区大小
+ * @param value10 乘以10后的数值
+ */
 static void Oled_FormatTenths(char *buf, size_t buf_size, int value10)
 {
     int whole = value10 / 10;
@@ -42,6 +64,17 @@ static void Oled_FormatTenths(char *buf, size_t buf_size, int value10)
     (void)snprintf(buf, buf_size, "%d.%1d", whole, frac);
 }
 
+/**
+ * @brief 填充OLED显示页面0
+ * @param line0 第0行
+ * @param line1 第1行
+ * @param line2 第2行
+ * @param line3 第3行
+ * @param state 系统状态
+ * @param distance10 距离(×10)
+ * @param aht20_temp10 温度(×10)
+ * @param humidity10 湿度(×10)
+ */
 static void Oled_FillPage0(char *line0, char *line1, char *line2, char *line3,
                            uint8_t state,
                            int distance10,
@@ -62,6 +95,16 @@ static void Oled_FillPage0(char *line0, char *line1, char *line2, char *line3,
     snprintf(line3, 22, "T:%s H:%s", temp_buf, hum_buf);
 }
 
+/**
+ * @brief 填充OLED显示页面1
+ * @param line0 第0行
+ * @param line1 第1行
+ * @param line2 第2行
+ * @param line3 第3行
+ * @param track 循迹传感器状态
+ * @param aht20_temp10 温度(×10)
+ * @param humidity10 湿度(×10)
+ */
 static void Oled_FillPage1(char *line0, char *line1, char *line2, char *line3,
                            uint8_t track,
                            int aht20_temp10,
@@ -83,6 +126,10 @@ static void Oled_FillPage1(char *line0, char *line1, char *line2, char *line3,
     line3[0] = '\0';
 }
 
+/**
+ * @brief OLED显示任务入口函数
+ * @param argument 任务参数（未使用）
+ */
 void StartOledTask(void *argument)
 {
     char line0[22];

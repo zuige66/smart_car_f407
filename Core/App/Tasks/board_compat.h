@@ -1,3 +1,12 @@
+/**
+  ******************************************************************************
+  * @file    board_compat.h
+  * @brief   板级兼容性抽象层
+  *          提供统一的硬件访问接口，实现不同硬件平台的兼容性
+  *          定义: I2C设备、UART端口、定时器、GPIO引脚等硬件资源映射
+  ******************************************************************************
+  */
+
 #ifndef BOARD_COMPAT_H
 #define BOARD_COMPAT_H
 
@@ -26,7 +35,7 @@
 static inline void Board_BuzzerSet(uint8_t on)
 {
     HAL_GPIO_WritePin(BUZZER_IN_GPIO_Port, BUZZER_IN_Pin,
-                      on ? GPIO_PIN_SET : GPIO_PIN_RESET);
+                      on ? GPIO_PIN_RESET : GPIO_PIN_SET);
 }
 
 static inline void Board_StatusLedSet(uint8_t on)

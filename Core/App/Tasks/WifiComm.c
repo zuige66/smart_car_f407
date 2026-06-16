@@ -1,9 +1,20 @@
+/**
+  ******************************************************************************
+  * @file    WifiComm.c
+  * @brief   WiFi通信模块实现
+  *          使用ESP8266模块进行WiFi通信，支持AP模式和TCP服务器
+  *          功能: ESP8266初始化、TCP连接管理、数据遥测上报、命令处理
+  *          通信协议: JSON格式数据传输
+  ******************************************************************************
+  */
+
 #include <stdio.h>
 #include <string.h>
 
 #include "cmsis_os2.h"
 
 #include "WifiComm.h"
+#include "RfidReader.h"
 #include "board_compat.h"
 
 #define WIFI_AP_SSID "SmartCar_F407"
@@ -89,9 +100,7 @@ static const char *const g_wifi_init_cmds[] = {
 
 static void Wifi_DebugText(const char *text)
 {
-    if ((text != NULL) && !g_wifi_bridge_mode) {
-        (void)HAL_UART_Transmit(&BOARD_DEBUG_UART, (uint8_t *)text, (uint16_t)strlen(text), 100U);
-    }
+    (void)text;
 }
 
 static void Wifi_FormatTenths(char *buf, size_t buf_size, int value10)
@@ -111,17 +120,44 @@ static void Wifi_FormatTrackBin(char *buf, size_t buf_size, uint8_t track)
                    (unsigned)(track & 0x01U));
 }
 
+static const char *Wifi_StateName(SystemState state)
+{
+    switch (state) {
+    case STATE_STANDBY:
+        return "idle";
+    case STATE_PATROL:
+        return "start_patrol";
+    case STATE_THERMAL_ALERT:
+        return "temp_warning";
+    case STATE_THERMAL_WARNING:
+        return "temp_alarm";
+    case STATE_EMERGENCY:
+        return "evacuate";
+    case STATE_LOW_BATTERY:
+        return "return_home";
+    default:
+        return "unknown";
+    }
+}
+
 static void Wifi_BuildCompactTelemetry(char *line, size_t line_size, const SensorData_t *data)
 {
+    static const char *last_rfid_loc = "unknown";
     char mq8_buf[12];
     char aht_temp_buf[12];
     char aht_hum_buf[12];
     char dist_buf[12];
     char track_bin[5];
     uint8_t track = 0U;
+    const char *rfid_loc;
 
     if ((line == NULL) || (line_size == 0U) || (data == NULL)) {
         return;
+    }
+
+    rfid_loc = Rfid_GetLocation(data->rfid_id);
+    if (strcmp(rfid_loc, "unknown") != 0) {
+        last_rfid_loc = rfid_loc;
     }
 
     track = data->track & 0x0FU;
@@ -136,13 +172,16 @@ static void Wifi_BuildCompactTelemetry(char *line, size_t line_size, const Senso
 
     (void)snprintf(line, line_size,
                    "{\"type\":\"telemetry\",\"MQ8\":%s,\"AHT_temp\":%s,\"AHT_hum\":%s,"
-                   "\"dist\":%s,\"track\":%u,\"track_bin\":\"%s\"}\n",
+                   "\"dist\":%s,\"track\":%u,\"track_bin\":\"%s\","
+                   "\"rfid_loc\":\"%s\",\"state\":\"%s\"}\n",
                    mq8_buf,
                    aht_temp_buf,
                    aht_hum_buf,
                    dist_buf,
                    (unsigned)track,
-                   track_bin);
+                   track_bin,
+                   last_rfid_loc,
+                   Wifi_StateName((SystemState)data->state));
 }
 
 static void Wifi_SendLiveTelemetry(void)
@@ -155,28 +194,10 @@ static void Wifi_SendLiveTelemetry(void)
     data.humidity = g_aht20_humidity;
     data.mq8_adc = g_mq8_adc_raw;
     data.track = g_track_status;
+    data.rfid_id = Rfid_ReadTag();
+    data.state = (uint8_t)Ctrl_GetState();
     Wifi_BuildCompactTelemetry(line, sizeof(line), &data);
     Wifi_SendTcpPayload(line);
-}
-
-static const char *Wifi_StateName(SystemState state)
-{
-    switch (state) {
-    case STATE_STANDBY:
-        return "standby";
-    case STATE_PATROL:
-        return "patrol";
-    case STATE_THERMAL_ALERT:
-        return "thermal_alert";
-    case STATE_THERMAL_WARNING:
-        return "thermal_warning";
-    case STATE_EMERGENCY:
-        return "emergency";
-    case STATE_LOW_BATTERY:
-        return "low_battery";
-    default:
-        return "unknown";
-    }
 }
 
 static void Wifi_SendRawToEsp(const char *text)
@@ -325,15 +346,66 @@ static void Wifi_ProcessCommand(const char *cmd)
         return;
     }
 
+    if (strstr(cmd, "emergency_stop") != NULL) {
+        Ctrl_Stop();
+        Wifi_SendAck("emergency_stop", "evacuate");
+        return;
+    }
+
+    if (strstr(cmd, "start_patrol") != NULL) {
+        Ctrl_Start();
+        Wifi_SendAck("start_patrol", "start_patrol");
+        return;
+    }
+
+    if (strstr(cmd, "return_home") != NULL) {
+        Ctrl_Start();
+        Wifi_SendAck("return_home", "return_home");
+        return;
+    }
+
+    if (strstr(cmd, "temp_warning") != NULL) {
+        Wifi_SendAck("temp_warning", "temp_warning");
+        return;
+    }
+
+    if (strstr(cmd, "temp_alarm") != NULL) {
+        Wifi_SendAck("temp_alarm", "temp_alarm");
+        return;
+    }
+
+    if (strstr(cmd, "idle") != NULL) {
+        Ctrl_Stop();
+        Wifi_SendAck("idle", "idle");
+        return;
+    }
+
+    if (strstr(cmd, "evacuate") != NULL) {
+        Ctrl_RequestEmergency();
+        Wifi_SendAck("evacuate", "evacuate");
+        return;
+    }
+
+    if (strstr(cmd, "pause") != NULL) {
+        Ctrl_Stop();
+        Wifi_SendAck("pause", "idle");
+        return;
+    }
+
+    if (strstr(cmd, "manual_reset") != NULL) {
+        Wifi_SendAck("manual_reset", "ignored");
+        return;
+    }
+
     if (strstr(cmd, "start") != NULL) {
         Ctrl_Start();
-        Wifi_SendAck("start", "ok");
+        Wifi_SendAck("start", "start_patrol");
         return;
     }
 
     if (strstr(cmd, "stop") != NULL) {
         Ctrl_Stop();
-        Wifi_SendAck("stop", "ok");
+        Wifi_SendAck("stop", "idle");
         return;
     }
 
@@ -343,7 +415,6 @@ static void Wifi_ProcessCommand(const char *cmd)
     }
 
     if (strstr(cmd, "status") != NULL) {
-        Wifi_DebugText("[WIFI] cmd=status\r\n");
         Wifi_SendAck("status", Wifi_StateName(Ctrl_GetState()));
         return;
     }
@@ -453,7 +524,10 @@ static void Wifi_ProcessRxText(char *text)
 
     if (strstr(text, "+IPD,") == NULL &&
         (strstr(text, "start") != NULL || strstr(text, "stop") != NULL ||
-         strstr(text, "ping") != NULL || strstr(text, "status") != NULL)) {
+         strstr(text, "pause") != NULL || strstr(text, "evacuate") != NULL ||
+         strstr(text, "emergency_stop") != NULL || strstr(text, "return_home") != NULL ||
+         strstr(text, "manual_reset") != NULL || strstr(text, "ping") != NULL ||
+         strstr(text, "status") != NULL)) {
         Wifi_ProcessCommand(text);
     }
 }
@@ -705,19 +779,18 @@ void Wifi_TaskStep(void)
             (void)snprintf(line, sizeof(line),
                            "{\"type\":\"alert\",\"state\":\"%s\",\"MQ8\":%s,\"AHT_temp\":%s,\"AHT_hum\":%s,"
                            "\"MLX_obj\":%s,\"MLX_amb\":%s,\"dist\":%s,"
-                           "\"track\":%u,\"track_bin\":\"%s\",\"mq8_do\":%u,\"rfid\":%u,"
+                           "\"track\":%u,\"track_bin\":\"%s\",\"mq8_do\":%u,\"rfid_loc\":\"%s\","
                            "\"bat\":%u}\n",
                            Wifi_StateName(msg.payload.alert.state),
                            mq8_buf, aht_temp_buf, aht_hum_buf,
                            mlx_obj_buf, mlx_amb_buf, dist_buf,
                            (unsigned)data->track, track_bin, (unsigned)data->mq8_do,
-                           (unsigned)data->rfid_id, (unsigned)data->battery_pct);
+                           Rfid_GetLocation(data->rfid_id), (unsigned)data->battery_pct);
             break;
         }
         case WIFI_TX_KIND_RFID:
             (void)snprintf(line, sizeof(line),
-                           "{\"type\":\"rfid\",\"rfid\":%u,\"location\":\"%s\"}\n",
-                           (unsigned)msg.payload.rfid.rfid_id,
+                           "{\"type\":\"rfid\",\"location\":\"%s\"}\n",
                            msg.payload.rfid.location);
             break;
         default:

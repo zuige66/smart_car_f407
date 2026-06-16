@@ -1,13 +1,24 @@
+/**
+  ******************************************************************************
+  * @file    stm32f4xx_it_user.c
+  * @brief   用户中断处理函数实现
+  *          包含系统异常处理和外设中断处理
+  ******************************************************************************
+  */
+
 #include "main.h"
 #include "runtime_diag.h"
 #include "usart.h"
 
-extern TIM_HandleTypeDef htim1;
-extern TIM_HandleTypeDef htim3;
-extern TIM_HandleTypeDef htim8;
-extern UART_HandleTypeDef huart2;
-extern UART_HandleTypeDef huart3;
+extern TIM_HandleTypeDef htim1;  /* HCSR04超声波定时器 */
+extern TIM_HandleTypeDef htim3;  /* 右电机PWM定时器 */
+extern TIM_HandleTypeDef htim8;  /* HAL时间基准定时器 */
+extern UART_HandleTypeDef huart2; /* 调试串口 */
+extern UART_HandleTypeDef huart3; /* WiFi ESP8266串口 */
 
+/**
+ * @brief 不可屏蔽中断处理函数
+ */
 void NMI_Handler(void)
 {
     while (1)

@@ -1,5 +1,12 @@
+/**
+ * @file RfidTask.c
+ * @brief RFID标签读取任务实现
+ * @details 使用RC522模块读取RFID标签，支持标签检测、UID读取和位置映射
+ */
+
 #include <stdio.h>
 #include <string.h>
+#include <stdarg.h>
 
 #include "cmsis_os2.h"
 
@@ -9,7 +16,7 @@
 #include "spi.h"
 #include "WifiComm.h"
 
-#define RFIDTASK_VERBOSE_LOG 0
+#define RFIDTASK_VERBOSE_LOG 1
 
 extern osThreadId_t myRfidTaskHandle;
 extern volatile uint32_t task_run_count[];
@@ -52,6 +59,9 @@ extern volatile uint32_t task_run_count[];
 
 #define RFID_MAX_LEN 16U
 
+/**
+ * @brief RFID状态枚举
+ */
 typedef enum {
     RFID_STATUS_OK = 0,
     RFID_STATUS_NO_TAG,
@@ -63,6 +73,13 @@ static uint8_t g_rfid_last_uid_size = 0U;
 static uint32_t g_rfid_overflow_count = 0U;
 
 #if RFIDTASK_VERBOSE_LOG
+/**
+ * @brief 打印FIFO溢出调试信息
+ * @param stage 溢出阶段
+ * @param fifo_level FIFO级别
+ * @param back_capacity 返回缓冲区容量
+ * @param back_bits 返回比特数
+ */
 static void Rfid_DebugOverflow(const char *stage,
                                uint8_t fifo_level,
                                uint8_t back_capacity,
@@ -98,21 +115,39 @@ static void Rfid_DebugOverflow(const char *stage,
 }
 #endif
 
+/**
+ * @brief 选中RC522芯片
+ */
 static void Rfid_Select(void)
 {
     HAL_GPIO_WritePin(RC522_SDA_GPIO_Port, RC522_SDA_Pin, GPIO_PIN_RESET);
 }
 
+/**
+ * @brief 取消选中RC522芯片
+ */
 static void Rfid_Deselect(void)
 {
     HAL_GPIO_WritePin(RC522_SDA_GPIO_Port, RC522_SDA_Pin, GPIO_PIN_SET);
 }
 
+/**
+ * @brief SPI数据传输
+ * @param tx 发送数据指针
+ * @param rx 接收数据指针
+ * @param size 数据大小
+ * @return HAL状态
+ */
 static HAL_StatusTypeDef Rfid_SpiTransfer(uint8_t *tx, uint8_t *rx, uint16_t size)
 {
     return HAL_SPI_TransmitReceive(&hspi1, tx, rx, size, RFID_SPI_TIMEOUT_MS);
 }
 
+/**
+ * @brief 写入RC522寄存器
+ * @param reg 寄存器地址
+ * @param value 要写入的值
+ */
 static void Rfid_WriteReg(uint8_t reg, uint8_t value)
 {
     uint8_t tx[2];
@@ -126,6 +161,11 @@ static void Rfid_WriteReg(uint8_t reg, uint8_t value)
     Rfid_Deselect();
 }
 
+/**
+ * @brief 读取RC522寄存器
+ * @param reg 寄存器地址
+ * @return 寄存器值
+ */
 static uint8_t Rfid_ReadReg(uint8_t reg)
 {
     uint8_t tx[2];
@@ -141,16 +181,29 @@ static uint8_t Rfid_ReadReg(uint8_t reg)
     return rx[1];
 }
 
+/**
+ * @brief 设置寄存器位掩码
+ * @param reg 寄存器地址
+ * @param mask 位掩码
+ */
 static void Rfid_SetBitMask(uint8_t reg, uint8_t mask)
 {
     Rfid_WriteReg(reg, (uint8_t)(Rfid_ReadReg(reg) | mask));
 }
 
+/**
+ * @brief 清除寄存器位掩码
+ * @param reg 寄存器地址
+ * @param mask 位掩码
+ */
 static void Rfid_ClearBitMask(uint8_t reg, uint8_t mask)
 {
     Rfid_WriteReg(reg, (uint8_t)(Rfid_ReadReg(reg) & (uint8_t)(~mask)));
 }
 
+/**
+ * @brief 重新配置SPI
+ */
 static void Rfid_ReconfigureSpi(void)
 {
     if (hspi1.Init.BaudRatePrescaler == SPI_BAUDRATEPRESCALER_16) {
@@ -162,6 +215,9 @@ static void Rfid_ReconfigureSpi(void)
     (void)HAL_SPI_Init(&hspi1);
 }
 
+/**
+ * @brief 开启天线
+ */
 static void Rfid_AntennaOn(void)
 {
     uint8_t value = Rfid_ReadReg(RFID_REG_TX_CONTROL);
@@ -170,12 +226,18 @@ static void Rfid_AntennaOn(void)
     }
 }
 
+/**
+ * @brief 复位RC522芯片
+ */
 static void Rfid_ResetChip(void)
 {
     Rfid_WriteReg(RFID_REG_COMMAND, RFID_CMD_SOFTRESET);
     osDelay(50U);
 }
 
+/**
+ * @brief 硬件初始化
+ */
 static void Rfid_HardwareInit(void)
 {
     Rfid_ReconfigureSpi();
@@ -191,6 +253,16 @@ static void Rfid_HardwareInit(void)
     Rfid_AntennaOn();
 }
 
+/**
+ * @brief 向卡片发送命令并接收响应
+ * @param command 命令类型
+ * @param send_data 发送数据
+ * @param send_len 发送数据长度
+ * @param back_data 接收数据缓冲区
+ * @param back_capacity 接收缓冲区容量
+ * @param back_bits 接收比特数指针
+ * @return RFID状态
+ */
 static RfidStatus_t Rfid_ToCard(uint8_t command,
                                 const uint8_t *send_data,
                                 uint8_t send_len,
@@ -291,6 +363,12 @@ static RfidStatus_t Rfid_ToCard(uint8_t command,
     return RFID_STATUS_OK;
 }
 
+/**
+ * @brief 请求卡片类型
+ * @param req_mode 请求模式
+ * @param tag_type 卡片类型指针
+ * @return RFID状态
+ */
 static RfidStatus_t Rfid_Request(uint8_t req_mode, uint8_t *tag_type)
 {
     uint16_t back_bits = 0U;
@@ -302,6 +380,11 @@ static RfidStatus_t Rfid_Request(uint8_t req_mode, uint8_t *tag_type)
                : RFID_STATUS_NO_TAG;
 }
 
+/**
+ * @brief 防冲突检测
+ * @param uid UID缓冲区
+ * @return RFID状态
+ */
 static RfidStatus_t Rfid_Anticoll(uint8_t *uid)
 {
     uint8_t i;
@@ -325,6 +408,12 @@ static RfidStatus_t Rfid_Anticoll(uint8_t *uid)
     return (check == uid[4]) ? RFID_STATUS_OK : RFID_STATUS_ERROR;
 }
 
+/**
+ * @brief 读取卡片UID
+ * @param uid UID缓冲区
+ * @param uid_size UID长度指针
+ * @return RFID状态
+ */
 static RfidStatus_t Rfid_ReadCardUid(uint8_t *uid, uint8_t *uid_size)
 {
     uint8_t tag_type[2];
@@ -345,6 +434,12 @@ static RfidStatus_t Rfid_ReadCardUid(uint8_t *uid, uint8_t *uid_size)
     return RFID_STATUS_OK;
 }
 
+/**
+ * @brief 检查UID是否相同
+ * @param uid UID数据
+ * @param uid_size UID长度
+ * @return 1-相同，0-不同
+ */
 static uint8_t Rfid_IsSameUid(const uint8_t *uid, uint8_t uid_size)
 {
     if ((uid_size != g_rfid_last_uid_size) || (uid_size == 0U)) {
@@ -354,6 +449,27 @@ static uint8_t Rfid_IsSameUid(const uint8_t *uid, uint8_t uid_size)
     return (uint8_t)(memcmp(g_rfid_last_uid, uid, uid_size) == 0 ? 1U : 0U);
 }
 
+/**
+ * @brief 格式化打印到串口
+ * @param fmt 格式化字符串
+ * @param ... 可变参数
+ */
+static void Rfid_Printf(const char *fmt, ...)
+{
+    char buf[128];
+    va_list args;
+
+    va_start(args, fmt);
+    (void)vsnprintf(buf, sizeof(buf), fmt, args);
+    va_end(args);
+
+    (void)HAL_UART_Transmit(&BOARD_DEBUG_UART, (uint8_t *)buf, (uint16_t)strlen(buf), 100U);
+}
+
+/**
+ * @brief RFID任务入口函数
+ * @param argument 任务参数（未使用）
+ */
 void StartRfidTask(void *argument)
 {
     uint8_t miss_count = 0U;
@@ -364,22 +480,39 @@ void StartRfidTask(void *argument)
     Rfid_Init();
     Rfid_HardwareInit();
 
+    Rfid_Printf("[RFID] Task started, waiting for tags...\r\n");
+
     for (;;) {
         (void)osThreadFlagsWait(RFID_FLAG_IRQ, osFlagsWaitAny, RFID_POLL_INTERVAL_MS);
         task_run_count[7]++;
 
         if (Rfid_ReadCardUid(uid, &uid_size) == RFID_STATUS_OK) {
-            miss_count = 0U;
             if (!Rfid_IsSameUid(uid, uid_size)) {
+                Rfid_UpdateUid(uid, uid_size);
+                Rfid_Printf("[RFID] NEW TAG  UID=");
+                for (uint8_t i = 0U; i < uid_size; ++i) {
+                    char hex[4];
+                    (void)snprintf(hex, sizeof(hex), "%s%02X", (i > 0U) ? ":" : "", uid[i]);
+                    Rfid_Printf("%s", hex);
+                }
+                uint8_t tag_id = Rfid_ReadTag();
+                Rfid_Printf("  id=%u loc=%s\r\n",
+                            (unsigned)tag_id, Rfid_GetLocation(tag_id));
+                miss_count = 0U;
                 memcpy(g_rfid_last_uid, uid, uid_size);
                 g_rfid_last_uid_size = uid_size;
+            } else {
+                miss_count = 0U;
             }
-            Rfid_UpdateUid(uid, uid_size);
         } else {
             if (miss_count < 0xFFU) {
                 ++miss_count;
             }
             if (miss_count >= RFID_MISS_LIMIT) {
+                if (g_rfid_last_uid_size > 0U) {
+                    Rfid_Printf("[RFID] TAG LOST  id=%u\r\n",
+                                (unsigned)Rfid_ReadTag());
+                }
                 g_rfid_last_uid_size = 0U;
                 memset(g_rfid_last_uid, 0, sizeof(g_rfid_last_uid));
                 Rfid_ClearTag();
@@ -388,6 +521,10 @@ void StartRfidTask(void *argument)
     }
 }
 
+/**
+ * @brief GPIO外部中断回调函数
+ * @param GPIO_Pin 触发中断的引脚
+ */
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
     if ((GPIO_Pin == RFID_IRQ_EXTI_PIN) && (myRfidTaskHandle != NULL)) {

@@ -1,3 +1,11 @@
+/**
+  ******************************************************************************
+  * @file    runtime_diag.c
+  * @brief   运行时诊断模块实现
+  *          提供HardFault异常捕获、栈溢出检测、断言失败处理和内存分配失败处理
+  ******************************************************************************
+  */
+
 #include "runtime_diag.h"
 
 #include <stdio.h>
@@ -8,13 +16,17 @@
 #include "task.h"
 #include "usart.h"
 
-volatile RuntimeDiag_HardFaultContext_t g_hardfault_ctx = {0};
-volatile uint32_t g_stack_overflow_count = 0U;
-volatile uint32_t g_malloc_failed_count = 0U;
-volatile uint32_t g_assert_failed_line = 0U;
-char g_stack_overflow_task_name[16] = {0};
-char g_assert_failed_file[48] = {0};
+volatile RuntimeDiag_HardFaultContext_t g_hardfault_ctx = {0};  /* HardFault上下文 */
+volatile uint32_t g_stack_overflow_count = 0U;                   /* 栈溢出计数 */
+volatile uint32_t g_malloc_failed_count = 0U;                    /* 内存分配失败计数 */
+volatile uint32_t g_assert_failed_line = 0U;                     /* 断言失败行号 */
+char g_stack_overflow_task_name[16] = {0};                       /* 栈溢出任务名称 */
+char g_assert_failed_file[48] = {0};                            /* 断言失败文件名 */
 
+/**
+ * @brief 通过UART发送诊断文本
+ * @param text 要发送的文本
+ */
 static void RuntimeDiag_SendText(const char *text)
 {
     if (text == NULL) {
