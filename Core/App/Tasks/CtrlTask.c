@@ -290,6 +290,7 @@ static void Ctrl_HandleRfidEvent(const SensorData_t *data)
     if (now_present && !prev_rfid_present) {
         const char *loc = Rfid_GetLocation(now_id);
         Ctrl_Printf("[CTRL] RFID id=%u loc=%s\r\n", (unsigned)now_id, loc);
+        Wifi_UpdateRfidLocation(loc);
 
         if (strcmp(loc, "start") == 0) {
             Ctrl_Start();

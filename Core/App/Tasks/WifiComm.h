@@ -17,6 +17,7 @@ uint8_t Wifi_IsConnected(void);
 void Wifi_SendTelemetry(SensorData_t *data);
 void Wifi_SendAlert(SystemState state, SensorData_t *data);
 void Wifi_SendRfidTag(uint8_t rfid_id, const char *location);
+void Wifi_UpdateRfidLocation(const char *loc);
 uint32_t Wifi_GetDroppedTxCount(void);
 uint8_t Wifi_CheckCommand(void);
 void Wifi_SetBridgeMode(uint8_t enable);

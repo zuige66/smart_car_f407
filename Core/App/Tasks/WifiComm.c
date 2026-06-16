@@ -77,6 +77,7 @@ static volatile uint8_t g_wifi_bridge_mode = 0U;
 static uint32_t g_wifi_last_status_poll_tick = 0U;
 static uint32_t g_wifi_last_alive_tick = 0U;
 static uint32_t g_wifi_last_tx_tick = 0U;
+static const char *g_wifi_last_rfid_loc = "unknown";
 
 extern volatile float g_distance;
 extern volatile float g_aht20_temp;
@@ -140,24 +141,24 @@ static const char *Wifi_StateName(SystemState state)
     }
 }
 
+void Wifi_UpdateRfidLocation(const char *loc)
+{
+    if (loc != NULL) {
+        g_wifi_last_rfid_loc = loc;
+    }
+}
+
 static void Wifi_BuildCompactTelemetry(char *line, size_t line_size, const SensorData_t *data)
 {
-    static const char *last_rfid_loc = "unknown";
     char mq8_buf[12];
     char aht_temp_buf[12];
     char aht_hum_buf[12];
     char dist_buf[12];
     char track_bin[5];
     uint8_t track = 0U;
-    const char *rfid_loc;
 
     if ((line == NULL) || (line_size == 0U) || (data == NULL)) {
         return;
-    }
-
-    rfid_loc = Rfid_GetLocation(data->rfid_id);
-    if (strcmp(rfid_loc, "unknown") != 0) {
-        last_rfid_loc = rfid_loc;
     }
 
     track = data->track & 0x0FU;
@@ -180,7 +181,7 @@ static void Wifi_BuildCompactTelemetry(char *line, size_t line_size, const Senso
                    dist_buf,
                    (unsigned)track,
                    track_bin,
-                   last_rfid_loc,
+                   g_wifi_last_rfid_loc,
                    Wifi_StateName((SystemState)data->state));
 }
 
