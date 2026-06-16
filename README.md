@@ -1,18 +1,6 @@
-# smart_car — STM32F407 智能巡检小车
+# smart_car — STM32F407VET6 智能巡检小车
 
-STM32F407VET6 + FreeRTOS + ESP8266 WiFi 遥控智能小车。  
-由旧工程 `clion_car (STM32F103)` 迁移而来，按实际硬件重新适配。
-
-## 功能
-
-- **循迹** — 4 路红外 + PID 转向 (Kp=95, Ki=8, Kd=20)
-- **避障** — 11 状态超声波避障，自动绕行较宽侧
-- **温度分级响应** — 29°C 预警 / 30°C 降速 / 31°C 紧急返航
-- **RFID 定位** — RC522 识别 8 个点位 (start / place_1~6 / end_stop)，遇点位停车测量 3s
-- **WiFi 遥测** — 每 3s 上报 JSON（含温度、湿度、距离、循迹、RFID 位置、状态）
-- **手机遥控** — TCP 命令：idle / start_patrol / evacuate / return_home 等
-- **OLED 显示** — 双页面循环：状态 + 传感器数据
-- **ESP 桥接** — 调试串口透传 ESP8266 AT 指令
+STM32F407 + FreeRTOS + ESP8266 WiFi 遥控智能小车。
 
 ## 快速开始
 
@@ -24,9 +12,27 @@ cmake --build --preset Debug
 
 ## WiFi 连接
 
-AP: `SmartCar_F407` / `12345678` → TCP `192.168.4.1:8080`
+| 参数 | 值 |
+|---|---|
+| SSID | `SmartCar_F407` |
+| 密码 | `12345678` |
+| TCP | `192.168.4.1:8080` |
+
+小车自动每 3 秒发送 JSON 遥测，手机可发送命令（`start_patrol` / `idle` / `evacuate` 等）。
+
+## 功能列表
+
+- 4 路红外循迹 + PID 控制
+- 11 状态超声波避障
+- 温度分级响应：29°C 预警 / 30°C 降速 / 31°C 紧急返航
+- RFID-RC522 8 个位置点识别 + 停车测量 + 终点掉头
+- ESP8266 WiFi 遥测上报 + TCP 命令控制
+- OLED 双页面状态显示
+- 上电 8 项自检
 
 ## 文档
 
-- **[CURRENT_CONFIG.md](CURRENT_CONFIG.md)** — 完整技术参考（引脚映射、任务表、状态机、协议等）
-- **[PORTING_DIFF.md](PORTING_DIFF.md)** — 从 STM32F103 迁移到 STM32F407 的差异说明
+| 文档 | 说明 |
+|---|---|
+| [CURRENT_CONFIG.md](CURRENT_CONFIG.md) | **完整技术参考手册** — 引脚映射、任务表、传感器、PID、RFID、WiFi 协议、状态机、避障、循迹、自检等所有细节 |
+| [PORTING_DIFF.md](PORTING_DIFF.md) | STM32F103 → STM32F407 迁移差异说明 |
