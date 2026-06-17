@@ -55,7 +55,9 @@ extern volatile uint32_t task_run_count[];
 #define RFID_REG_RFCFG 0x26U
 
 #define RFID_PICC_REQIDL 0x26U
+#define RFID_PICC_WUPA 0x52U
 #define RFID_PICC_ANTICOLL 0x93U
+#define RFID_PICC_HLTA 0x50U
 
 #define RFID_MAX_LEN 16U
 
@@ -254,6 +256,17 @@ static void Rfid_HardwareInit(void)
 }
 
 /**
+ * @brief 复位RC522到IDLE状态
+ * @details 将命令寄存器置为IDLE，清空中断标志和FIFO
+ */
+static void Rfid_ResetToIdle(void)
+{
+    Rfid_WriteReg(RFID_REG_COMMAND, RFID_CMD_IDLE);
+    Rfid_WriteReg(RFID_REG_COMMIRQ, 0x7FU);
+    Rfid_SetBitMask(RFID_REG_FIFO_LEVEL, 0x80U);
+}
+
+/**
  * @brief 向卡片发送命令并接收响应
  * @param command 命令类型
  * @param send_data 发送数据
@@ -289,10 +302,8 @@ static RfidStatus_t Rfid_ToCard(uint8_t command,
         wait_irq = 0x30U;
     }
 
+    Rfid_ResetToIdle();
     Rfid_WriteReg(RFID_REG_COMMIEN, (uint8_t)(irq_en | 0x80U));
-    Rfid_ClearBitMask(RFID_REG_COMMIRQ, 0x80U);
-    Rfid_SetBitMask(RFID_REG_FIFO_LEVEL, 0x80U);
-    Rfid_WriteReg(RFID_REG_COMMAND, RFID_CMD_IDLE);
 
     for (i = 0U; i < send_len; ++i) {
         Rfid_WriteReg(RFID_REG_FIFO_DATA, send_data[i]);
@@ -314,21 +325,29 @@ static RfidStatus_t Rfid_ToCard(uint8_t command,
     }
 
     Rfid_ClearBitMask(RFID_REG_BIT_FRAMING, 0x80U);
+
+    if (command != RFID_CMD_TRANSCEIVE) {
+        return (i > 0U) ? RFID_STATUS_OK : RFID_STATUS_ERROR;
+    }
+
     if (i == 0U) {
-        return RFID_STATUS_ERROR;
+        Rfid_ResetToIdle();
+        return RFID_STATUS_NO_TAG;
     }
 
     error = Rfid_ReadReg(RFID_REG_ERROR);
     if ((error & 0x1BU) != 0U) {
+        Rfid_ResetToIdle();
         return RFID_STATUS_ERROR;
     }
 
     irq = Rfid_ReadReg(RFID_REG_COMMIRQ);
     if ((irq & 0x01U) != 0U) {
+        Rfid_ResetToIdle();
         return RFID_STATUS_NO_TAG;
     }
 
-    if ((back_data != NULL) && (back_bits != NULL) && (command == RFID_CMD_TRANSCEIVE)) {
+    if ((back_data != NULL) && (back_bits != NULL)) {
         fifo_level = Rfid_ReadReg(RFID_REG_FIFO_LEVEL);
         last_bits = (uint8_t)(Rfid_ReadReg(RFID_REG_CONTROL) & 0x07U);
 
@@ -356,10 +375,12 @@ static RfidStatus_t Rfid_ToCard(uint8_t command,
 
         if (store_count < fifo_count) {
             Rfid_DebugOverflow("tocard", fifo_count, back_capacity, *back_bits);
+            Rfid_ResetToIdle();
             return RFID_STATUS_ERROR;
         }
     }
 
+    Rfid_WriteReg(RFID_REG_COMMAND, RFID_CMD_IDLE);
     return RFID_STATUS_OK;
 }
 
@@ -409,10 +430,28 @@ static RfidStatus_t Rfid_Anticoll(uint8_t *uid)
 }
 
 /**
+ * @brief 将标签置为HALT状态
+ * @details 发送HLTA命令使标签进入HALT状态，
+ *          下次读取需使用WUPA唤醒
+ */
+static void Rfid_Halt(void)
+{
+    uint8_t halt_cmd[2] = {RFID_PICC_HLTA, 0x00U};
+    uint16_t back_bits = 0U;
+    uint8_t back_data[2];
+
+    Rfid_WriteReg(RFID_REG_BIT_FRAMING, 0x00U);
+    (void)Rfid_ToCard(RFID_CMD_TRANSCEIVE, halt_cmd, sizeof(halt_cmd),
+                      back_data, sizeof(back_data), &back_bits);
+}
+
+/**
  * @brief 读取卡片UID
  * @param uid UID缓冲区
  * @param uid_size UID长度指针
  * @return RFID状态
+ * @details 使用WUPA(0x52)唤醒标签，比REQIDL(0x26)更可靠。
+ *          读取成功后发送HLTA使标签回到HALT状态。
  */
 static RfidStatus_t Rfid_ReadCardUid(uint8_t *uid, uint8_t *uid_size)
 {
@@ -422,7 +461,7 @@ static RfidStatus_t Rfid_ReadCardUid(uint8_t *uid, uint8_t *uid_size)
         return RFID_STATUS_ERROR;
     }
 
-    if (Rfid_Request(RFID_PICC_REQIDL, tag_type) != RFID_STATUS_OK) {
+    if (Rfid_Request(RFID_PICC_WUPA, tag_type) != RFID_STATUS_OK) {
         return RFID_STATUS_NO_TAG;
     }
 
@@ -431,6 +470,7 @@ static RfidStatus_t Rfid_ReadCardUid(uint8_t *uid, uint8_t *uid_size)
     }
 
     *uid_size = 4U;
+    Rfid_Halt();
     return RFID_STATUS_OK;
 }
 
@@ -467,12 +507,23 @@ static void Rfid_Printf(const char *fmt, ...)
 }
 
 /**
+ * @brief 硬件恢复
+ * @details 重新初始化RC522硬件，用于从通信错误中恢复
+ */
+static void Rfid_RecoveryReset(void)
+{
+    Rfid_Printf("[RFID] HW recovery reset...\r\n");
+    Rfid_HardwareInit();
+}
+
+/**
  * @brief RFID任务入口函数
  * @param argument 任务参数（未使用）
  */
 void StartRfidTask(void *argument)
 {
     uint8_t miss_count = 0U;
+    uint8_t reset_count = 0U;
     uint8_t uid[5];
     uint8_t uid_size = 0U;
     (void)argument;
@@ -504,6 +555,7 @@ void StartRfidTask(void *argument)
             } else {
                 miss_count = 0U;
             }
+            reset_count = 0U;
         } else {
             if (miss_count < 0xFFU) {
                 ++miss_count;
@@ -516,6 +568,16 @@ void StartRfidTask(void *argument)
                 g_rfid_last_uid_size = 0U;
                 memset(g_rfid_last_uid, 0, sizeof(g_rfid_last_uid));
                 Rfid_ClearTag();
+
+                reset_count++;
+                if (reset_count >= 5U) {
+                    Rfid_RecoveryReset();
+                    reset_count = 0U;
+                    miss_count = 0U;
+                    g_rfid_last_uid_size = 0U;
+                    memset(g_rfid_last_uid, 0, sizeof(g_rfid_last_uid));
+                    Rfid_ClearTag();
+                }
             }
         }
     }

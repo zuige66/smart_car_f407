@@ -902,15 +902,7 @@ T=3.0s:  WiFi 遥测发送 ← 从缓存读取 rfid_loc = "place_1" ✅
 {"type":"ack","cmd":"<str>","result":"<str>"}
 ```
 
-**告警 (alert) — 已定义但未调用：**
-```json
-{"type":"alert","state":"<str>","MQ8":<float>,"AHT_temp":<float>,"AHT_hum":<float>,"MLX_obj":<float>,"MLX_amb":<float>,"dist":<float>,"track":<int>,"track_bin":"<str>","mq8_do":<int>,"rfid_loc":"<str>","bat":<int>}
-```
-
-**RFID 事件 (rfid) — 已定义但未调用：**
-```json
-{"type":"rfid","location":"<str>"}
-```
+*(仅 telemetry 和 ack 两种 JSON 类型在主动使用)*
 
 ### 13.6 Wifi_TaskStep 完整流程
 
