@@ -839,14 +839,15 @@ T=3.0s:  WiFi 遥测发送 ← 从缓存读取 rfid_loc = "place_1" ✅
 
 **遥测 JSON 格式：**
 ```json
-{"type":"telemetry","MQ8":1230.5,"AHT_temp":25.4,"AHT_hum":55.2,"dist":12.3,"track":5,"track_bin":"0101","rfid_loc":"place_1","state":"start_patrol"}
+{"type":"telemetry","MLX_obj":36.5,"MQ8":1230.5,"AHT_temp":25.4,"AHT_hum":55.2,"dist":12.3,"track":5,"track_bin":"0101","rfid_loc":"place_1","state":"start_patrol"}
 ```
 
 **字段说明：**
 
 | 字段 | 类型 | 示例 | 说明 |
-|---|---|---|---|
+|---|---|---|---|---|
 | `type` | string | `"telemetry"` | 固定标识 |
+| `MLX_obj` | float(1位小数) | `36.5` | MLX90614 物体温度 °C（红外测温） |
 | `MQ8` | float(1位小数) | `1230.5` | MQ-8 ADC 值 ×10 再格式化 |
 | `AHT_temp` | float(1位小数) | `25.4` | AHT20 温度 °C |
 | `AHT_hum` | float(1位小数) | `55.2` | AHT20 湿度 %RH |
@@ -894,7 +895,7 @@ T=3.0s:  WiFi 遥测发送 ← 从缓存读取 rfid_loc = "place_1" ✅
 
 **遥测 (telemetry)：**
 ```json
-{"type":"telemetry","MQ8":<float>,"AHT_temp":<float>,"AHT_hum":<float>,"dist":<float>,"track":<int>,"track_bin":"<str>","rfid_loc":"<str>","state":"<str>"}
+{"type":"telemetry","MLX_obj":<float>,"MQ8":<float>,"AHT_temp":<float>,"AHT_hum":<float>,"dist":<float>,"track":<int>,"track_bin":"<str>","rfid_loc":"<str>","state":"<str>"}
 ```
 
 **应答 (ack)：**

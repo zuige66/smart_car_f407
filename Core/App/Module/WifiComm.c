@@ -82,6 +82,7 @@ static const char *g_wifi_last_rfid_loc = "unknown";
 extern volatile float g_distance;
 extern volatile float g_aht20_temp;
 extern volatile float g_aht20_humidity;
+extern volatile float g_mlx90614_object;
 extern volatile uint16_t g_mq8_adc_raw;
 extern volatile uint8_t g_track_status;
 
@@ -153,6 +154,7 @@ static void Wifi_BuildCompactTelemetry(char *line, size_t line_size, const Senso
     char mq8_buf[12];
     char aht_temp_buf[12];
     char aht_hum_buf[12];
+    char mlx_obj_buf[12];
     char dist_buf[12];
     char track_bin[5];
     uint8_t track = 0U;
@@ -167,14 +169,18 @@ static void Wifi_BuildCompactTelemetry(char *line, size_t line_size, const Senso
                       (int)(data->temperature * 10.0f + ((data->temperature >= 0.0f) ? 0.5f : -0.5f)));
     Wifi_FormatTenths(aht_hum_buf, sizeof(aht_hum_buf),
                       (int)(data->humidity * 10.0f + ((data->humidity >= 0.0f) ? 0.5f : -0.5f)));
+    Wifi_FormatTenths(mlx_obj_buf, sizeof(mlx_obj_buf),
+                      (int)(data->object_temp * 10.0f + ((data->object_temp >= 0.0f) ? 0.5f : -0.5f)));
     Wifi_FormatTenths(dist_buf, sizeof(dist_buf),
                       (int)(data->distance * 10.0f + ((data->distance >= 0.0f) ? 0.5f : -0.5f)));
     Wifi_FormatTrackBin(track_bin, sizeof(track_bin), track);
 
     (void)snprintf(line, line_size,
-                   "{\"type\":\"telemetry\",\"MQ8\":%s,\"AHT_temp\":%s,\"AHT_hum\":%s,"
+                   "{\"type\":\"telemetry\",\"MLX_obj\":%s,"
+                   "\"MQ8\":%s,\"AHT_temp\":%s,\"AHT_hum\":%s,"
                    "\"dist\":%s,\"track\":%u,\"track_bin\":\"%s\","
                    "\"rfid_loc\":\"%s\",\"state\":\"%s\"}\n",
+                   mlx_obj_buf,
                    mq8_buf,
                    aht_temp_buf,
                    aht_hum_buf,
@@ -193,6 +199,7 @@ static void Wifi_SendLiveTelemetry(void)
     data.distance = g_distance;
     data.temperature = g_aht20_temp;
     data.humidity = g_aht20_humidity;
+    data.object_temp = g_mlx90614_object;
     data.mq8_adc = g_mq8_adc_raw;
     data.track = g_track_status;
     data.rfid_id = Rfid_ReadTag();

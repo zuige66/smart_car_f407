@@ -30,6 +30,14 @@ cmake --build --preset Debug
 - OLED 双页面状态显示
 - 上电 8 项自检
 
+## 安卓手机上位机
+
+配套安卓上位机 App，用于 WiFi 调试和遥控：
+
+- **GitHub**: https://github.com/zuige66/BotHost
+- 连接小车 WiFi `SmartCar_F407`（密码 `12345678`）后，通过 TCP `192.168.4.1:8080` 通信
+- 可实时查看遥测数据、发送控制命令
+
 ## 文档
 
 | 文档 | 说明 |

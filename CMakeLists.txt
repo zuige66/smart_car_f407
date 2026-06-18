@@ -57,31 +57,33 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/App/Platform/stm32f4xx_hal_timebase_tim_user.c
     Core/App/Platform/stm32f4xx_it_user.c
     Core/App/Platform/runtime_diag.c
-    Core/App/Tasks/BatteryCtrl.c
-    Core/App/Tasks/Aht20.c
     Core/App/Tasks/CtrlTask.c
     Core/App/Tasks/DriverTask.c
-    Core/App/Tasks/Encoder.c
     Core/App/Tasks/HCSR04.c
     Core/App/Tasks/LedTask.c
-    Core/App/Tasks/motor.c
-    Core/App/Tasks/ObstacleCtrl.c
     Core/App/Tasks/OledTask.c
-    Core/App/Tasks/pid.c
     Core/App/Tasks/RfidTask.c
-    Core/App/Tasks/RfidReader.c
-    Core/App/Tasks/SelfTest.c
-    Core/App/Tasks/ThermalCtrl.c
-    Core/App/Tasks/TrackCtrl.c
     Core/App/Tasks/SensorTask.c
     Core/App/Tasks/UartTask.c
-    Core/App/Tasks/WifiComm.c
     Core/App/Tasks/WifiTask.c
+    Core/App/Driver/Aht20.c
+    Core/App/Driver/motor.c
+    Core/App/Driver/pid.c
+    Core/App/Driver/RfidReader.c
+    Core/App/Module/BatteryCtrl.c
+    Core/App/Module/Encoder.c
+    Core/App/Module/ObstacleCtrl.c
+    Core/App/Module/SelfTest.c
+    Core/App/Module/ThermalCtrl.c
+    Core/App/Module/TrackCtrl.c
+    Core/App/Module/WifiComm.c
 )
 
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/Core/App/Tasks
+    ${CMAKE_SOURCE_DIR}/Core/App/Driver
+    ${CMAKE_SOURCE_DIR}/Core/App/Module
     ${CMAKE_SOURCE_DIR}/Core/App/Platform
 )
 
