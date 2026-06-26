@@ -1,12 +1,12 @@
-/**
+﻿/**
  * @file OledTask.c
- * @brief OLED显示任务实现
- * @details 在OLED屏幕上显示系统状态、传感器数据等信息
- */
+ * @brief OLED鏄剧ず浠诲姟瀹炵幇
+ * @details 鍦∣LED灞忓箷涓婃樉绀虹郴缁熺姸鎬併€佷紶鎰熷櫒鏁版嵁绛変俊鎭? */
 
 #include <stdio.h>
 #include "cmsis_os2.h"
 #include "Ctrl.h"
+#include "AIStatus.h"
 #include "oled.h"
 
 extern volatile float g_distance;
@@ -21,7 +21,7 @@ extern volatile uint8_t g_track_status;
 extern volatile uint32_t task_run_count[];
 
 /**
- * @brief 系统状态名称映射表
+ * @brief 绯荤粺鐘舵€佸悕绉版槧灏勮〃
  */
 static const char *state_names[] = {
     "IDLE",
@@ -33,12 +33,7 @@ static const char *state_names[] = {
 };
 
 /**
- * @brief 限制显示数值范围
- * @param value 输入值
- * @param min_value 最小值
- * @param max_value 最大值
- * @return 限制后的数值
- */
+ * @brief 闄愬埗鏄剧ず鏁板€艰寖鍥? * @param value 杈撳叆鍊? * @param min_value 鏈€灏忓€? * @param max_value 鏈€澶у€? * @return 闄愬埗鍚庣殑鏁板€? */
 static int Oled_ClampDisplayInt(int value, int min_value, int max_value)
 {
     if (value < min_value) {
@@ -51,11 +46,7 @@ static int Oled_ClampDisplayInt(int value, int min_value, int max_value)
 }
 
 /**
- * @brief 格式化十分位数值
- * @param buf 输出缓冲区
- * @param buf_size 缓冲区大小
- * @param value10 乘以10后的数值
- */
+ * @brief 鏍煎紡鍖栧崄鍒嗕綅鏁板€? * @param buf 杈撳嚭缂撳啿鍖? * @param buf_size 缂撳啿鍖哄ぇ灏? * @param value10 涔樹互10鍚庣殑鏁板€? */
 static void Oled_FormatTenths(char *buf, size_t buf_size, int value10)
 {
     int whole = value10 / 10;
@@ -65,15 +56,10 @@ static void Oled_FormatTenths(char *buf, size_t buf_size, int value10)
 }
 
 /**
- * @brief 填充OLED显示页面0
- * @param line0 第0行
- * @param line1 第1行
- * @param line2 第2行
- * @param line3 第3行
- * @param state 系统状态
- * @param distance10 距离(×10)
- * @param aht20_temp10 温度(×10)
- * @param humidity10 湿度(×10)
+ * @brief 濉厖OLED鏄剧ず椤甸潰0
+ * @param line0 绗?琛? * @param line1 绗?琛? * @param line2 绗?琛? * @param line3 绗?琛? * @param state 绯荤粺鐘舵€? * @param distance10 璺濈(脳10)
+ * @param aht20_temp10 娓╁害(脳10)
+ * @param humidity10 婀垮害(脳10)
  */
 static void Oled_FillPage0(char *line0, char *line1, char *line2, char *line3,
                            uint8_t state,
@@ -96,19 +82,15 @@ static void Oled_FillPage0(char *line0, char *line1, char *line2, char *line3,
 }
 
 /**
- * @brief 填充OLED显示页面1
- * @param line0 第0行
- * @param line1 第1行
- * @param line2 第2行
- * @param line3 第3行
- * @param track 循迹传感器状态
- * @param aht20_temp10 温度(×10)
- * @param humidity10 湿度(×10)
+ * @brief 濉厖OLED鏄剧ず椤甸潰1
+ * @param line0 绗?琛? * @param line1 绗?琛? * @param line2 绗?琛? * @param line3 绗?琛? * @param track 寰抗浼犳劅鍣ㄧ姸鎬? * @param aht20_temp10 娓╁害(脳10)
+ * @param humidity10 婀垮害(脳10)
  */
 static void Oled_FillPage1(char *line0, char *line1, char *line2, char *line3,
                            uint8_t track,
                            int aht20_temp10,
-                           int humidity10)
+                           int humidity10,
+                           const AIStatus_t *ai_status)
 {
     char temp_buf[8];
     char hum_buf[8];
@@ -122,14 +104,17 @@ static void Oled_FillPage1(char *line0, char *line1, char *line2, char *line3,
              (unsigned)((track >> 2) & 0x01U),
              (unsigned)((track >> 1) & 0x01U),
              (unsigned)(track & 0x01U));
-    line2[0] = '\0';
+    if (ai_status != NULL && ai_status->ready && ai_status->score_valid) {
+        snprintf(line2, 22, "AI:%3u", (unsigned)ai_status->similarity);
+    } else {
+        snprintf(line2, 22, "AI:--");
+    }
     line3[0] = '\0';
 }
 
 /**
- * @brief OLED显示任务入口函数
- * @param argument 任务参数（未使用）
- */
+ * @brief OLED鏄剧ず浠诲姟鍏ュ彛鍑芥暟
+ * @param argument 浠诲姟鍙傛暟锛堟湭浣跨敤锛? */
 void StartOledTask(void *argument)
 {
     char line0[22];
@@ -147,6 +132,7 @@ void StartOledTask(void *argument)
     for (;;) {
         uint8_t state = g_obs_state;
         uint8_t track = g_track_status & 0x0FU;
+        AIStatus_t ai_status = AI_StatusGet();
         uint32_t now = osKernelGetTickCount();
         int distance10 = (int)(g_distance * 10.0f + 0.5f);
         int object10 = (int)(g_mlx90614_object * 10.0f + 0.5f);
@@ -172,7 +158,7 @@ void StartOledTask(void *argument)
         if (page == 0U) {
             Oled_FillPage0(line0, line1, line2, line3, state, distance10, aht20_temp10, humidity10);
         } else {
-            Oled_FillPage1(line0, line1, line2, line3, track, aht20_temp10, humidity10);
+            Oled_FillPage1(line0, line1, line2, line3, track, aht20_temp10, humidity10, &ai_status);
         }
 
         OLED_NewFrame();

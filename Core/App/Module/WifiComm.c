@@ -1,10 +1,8 @@
-/**
+﻿/**
   ******************************************************************************
   * @file    WifiComm.c
-  * @brief   WiFi通信模块实现
-  *          使用ESP8266模块进行WiFi通信，支持AP模式和TCP服务器
-  *          功能: ESP8266初始化、TCP连接管理、数据遥测上报、命令处理
-  *          通信协议: JSON格式数据传输
+  * @brief   WiFi閫氫俊妯″潡瀹炵幇
+  *          浣跨敤ESP8266妯″潡杩涜WiFi閫氫俊锛屾敮鎸丄P妯″紡鍜孴CP鏈嶅姟鍣?  *          鍔熻兘: ESP8266鍒濆鍖栥€乀CP杩炴帴绠＄悊銆佹暟鎹仴娴嬩笂鎶ャ€佸懡浠ゅ鐞?  *          閫氫俊鍗忚: JSON鏍煎紡鏁版嵁浼犺緭
   ******************************************************************************
   */
 
@@ -14,6 +12,7 @@
 #include "cmsis_os2.h"
 
 #include "WifiComm.h"
+#include "AIStatus.h"
 #include "RfidReader.h"
 #include "board_compat.h"
 
@@ -157,6 +156,7 @@ static void Wifi_BuildCompactTelemetry(char *line, size_t line_size, const Senso
     char mlx_obj_buf[12];
     char dist_buf[12];
     char track_bin[5];
+    AIStatus_t ai_status = {0};
     uint8_t track = 0U;
 
     if ((line == NULL) || (line_size == 0U) || (data == NULL)) {
@@ -164,6 +164,7 @@ static void Wifi_BuildCompactTelemetry(char *line, size_t line_size, const Senso
     }
 
     track = data->track & 0x0FU;
+    ai_status = AI_StatusGet();
     Wifi_FormatTenths(mq8_buf, sizeof(mq8_buf), (int)data->mq8_adc * 10);
     Wifi_FormatTenths(aht_temp_buf, sizeof(aht_temp_buf),
                       (int)(data->temperature * 10.0f + ((data->temperature >= 0.0f) ? 0.5f : -0.5f)));
@@ -179,7 +180,7 @@ static void Wifi_BuildCompactTelemetry(char *line, size_t line_size, const Senso
                    "{\"type\":\"telemetry\",\"MLX_obj\":%s,"
                    "\"MQ8\":%s,\"AHT_temp\":%s,\"AHT_hum\":%s,"
                    "\"dist\":%s,\"track\":%u,\"track_bin\":\"%s\","
-                   "\"rfid_loc\":\"%s\",\"state\":\"%s\"}\n",
+                   "\"rfid_loc\":\"%s\",\"state\":\"%s\",\"ai_score\":%u,\"ai_ready\":%u}\n",
                    mlx_obj_buf,
                    mq8_buf,
                    aht_temp_buf,
@@ -188,7 +189,9 @@ static void Wifi_BuildCompactTelemetry(char *line, size_t line_size, const Senso
                    (unsigned)track,
                    track_bin,
                    g_wifi_last_rfid_loc,
-                   Wifi_StateName((SystemState)data->state));
+                   Wifi_StateName((SystemState)data->state),
+                   (unsigned)ai_status.similarity,
+                   (unsigned)(ai_status.ready && ai_status.score_valid));
 }
 
 static void Wifi_SendLiveTelemetry(void)
@@ -770,6 +773,7 @@ void Wifi_TaskStep(void)
             char mlx_amb_buf[12];
             char dist_buf[12];
             char track_bin[5];
+            AIStatus_t ai_status = AI_StatusGet();
             SensorData_t *data = &msg.payload.alert.data;
 
             Wifi_FormatTenths(mq8_buf, sizeof(mq8_buf), (int)data->mq8_adc * 10);
@@ -788,12 +792,14 @@ void Wifi_TaskStep(void)
                            "{\"type\":\"alert\",\"state\":\"%s\",\"MQ8\":%s,\"AHT_temp\":%s,\"AHT_hum\":%s,"
                            "\"MLX_obj\":%s,\"MLX_amb\":%s,\"dist\":%s,"
                            "\"track\":%u,\"track_bin\":\"%s\",\"mq8_do\":%u,\"rfid_loc\":\"%s\","
-                           "\"bat\":%u}\n",
+                           "\"bat\":%u,\"ai_score\":%u,\"ai_ready\":%u}\n",
                            Wifi_StateName(msg.payload.alert.state),
                            mq8_buf, aht_temp_buf, aht_hum_buf,
                            mlx_obj_buf, mlx_amb_buf, dist_buf,
                            (unsigned)data->track, track_bin, (unsigned)data->mq8_do,
-                           Rfid_GetLocation(data->rfid_id), (unsigned)data->battery_pct);
+                           Rfid_GetLocation(data->rfid_id), (unsigned)data->battery_pct,
+                           (unsigned)ai_status.similarity,
+                           (unsigned)(ai_status.ready && ai_status.score_valid));
             break;
         }
         case WIFI_TX_KIND_RFID:
@@ -810,3 +816,7 @@ void Wifi_TaskStep(void)
         }
     }
 }
+
+
+
+

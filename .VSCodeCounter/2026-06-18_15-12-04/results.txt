@@ -1,0 +1,68 @@
+Date : 2026-06-18 15:12:04
+Directory : d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Middlewares
+Total : 33 files,  13154 codes, 14406 comments, 3487 blanks, all 31047 lines
+
+Languages
++----------+------------+------------+------------+------------+------------+
+| language | files      | code       | comment    | blank      | total      |
++----------+------------+------------+------------+------------+------------+
+| C        |         10 |      9,873 |      3,545 |      2,290 |     15,708 |
+| C++      |         23 |      3,281 |     10,861 |      1,197 |     15,339 |
++----------+------------+------------+------------+------------+------------+
+
+Directories
++--------------------------------------------------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| path                                                                                                                           | files      | code       | comment    | blank      | total      |
++--------------------------------------------------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| .                                                                                                                              |         33 |     13,154 |     14,406 |      3,487 |     31,047 |
+| Third_Party                                                                                                                    |         33 |     13,154 |     14,406 |      3,487 |     31,047 |
+| Third_Party\FreeRTOS                                                                                                           |         33 |     13,154 |     14,406 |      3,487 |     31,047 |
+| Third_Party\FreeRTOS\Source                                                                                                    |         33 |     13,154 |     14,406 |      3,487 |     31,047 |
+| Third_Party\FreeRTOS\Source (Files)                                                                                            |          7 |      7,322 |      2,920 |      1,714 |     11,956 |
+| Third_Party\FreeRTOS\Source\CMSIS_RTOS_V2                                                                                      |          5 |      2,678 |      1,057 |        705 |      4,440 |
+| Third_Party\FreeRTOS\Source\include                                                                                            |         18 |      2,365 |      9,923 |        850 |     13,138 |
+| Third_Party\FreeRTOS\Source\portable                                                                                           |          3 |        789 |        506 |        218 |      1,513 |
+| Third_Party\FreeRTOS\Source\portable\GCC                                                                                       |          2 |        501 |        368 |        151 |      1,020 |
+| Third_Party\FreeRTOS\Source\portable\GCC\ARM_CM4F                                                                              |          2 |        501 |        368 |        151 |      1,020 |
+| Third_Party\FreeRTOS\Source\portable\MemMang                                                                                   |          1 |        288 |        138 |         67 |        493 |
++--------------------------------------------------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+
+Files
++--------------------------------------------------------------------------------------------------------------------------------+----------+------------+------------+------------+------------+
+| filename                                                                                                                       | language | code       | comment    | blank      | total      |
++--------------------------------------------------------------------------------------------------------------------------------+----------+------------+------------+------------+------------+
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Middlewares\Third_Party\FreeRTOS\Source\CMSIS_RTOS_V2\cmsis_os.h          | C++      |        385 |        333 |        129 |        847 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Middlewares\Third_Party\FreeRTOS\Source\CMSIS_RTOS_V2\cmsis_os2.c         | C        |      1,894 |        185 |        404 |      2,483 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Middlewares\Third_Party\FreeRTOS\Source\CMSIS_RTOS_V2\cmsis_os2.h         | C++      |        275 |        319 |        141 |        735 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Middlewares\Third_Party\FreeRTOS\Source\CMSIS_RTOS_V2\freertos_mpool.h    | C++      |         27 |         27 |         10 |         64 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Middlewares\Third_Party\FreeRTOS\Source\CMSIS_RTOS_V2\freertos_os2.h      | C++      |         97 |        193 |         21 |        311 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Middlewares\Third_Party\FreeRTOS\Source\croutine.c                        | C        |        179 |        117 |         58 |        354 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Middlewares\Third_Party\FreeRTOS\Source\event_groups.c                    | C        |        457 |        181 |        116 |        754 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Middlewares\Third_Party\FreeRTOS\Source\include\FreeRTOS.h                | C++      |        797 |        262 |        237 |      1,296 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Middlewares\Third_Party\FreeRTOS\Source\include\StackMacros.h             | C++      |         65 |         47 |         22 |        134 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Middlewares\Third_Party\FreeRTOS\Source\include\atomic.h                  | C++      |        169 |        193 |         53 |        415 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Middlewares\Third_Party\FreeRTOS\Source\include\croutine.h                | C++      |         68 |        629 |         24 |        721 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Middlewares\Third_Party\FreeRTOS\Source\include\deprecated_definitions.h  | C++      |        180 |         38 |         62 |        280 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Middlewares\Third_Party\FreeRTOS\Source\include\event_groups.h            | C++      |         45 |        684 |         29 |        758 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Middlewares\Third_Party\FreeRTOS\Source\include\list.h                    | C++      |         97 |        279 |         37 |        413 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Middlewares\Third_Party\FreeRTOS\Source\include\message_buffer.h          | C++      |         29 |        748 |         27 |        804 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Middlewares\Third_Party\FreeRTOS\Source\include\mpu_prototypes.h          | C++      |        110 |         38 |         13 |        161 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Middlewares\Third_Party\FreeRTOS\Source\include\mpu_wrappers.h            | C++      |        119 |         48 |         23 |        190 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Middlewares\Third_Party\FreeRTOS\Source\include\portable.h                | C++      |         85 |         86 |         29 |        200 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Middlewares\Third_Party\FreeRTOS\Source\include\projdefs.h                | C++      |         68 |         40 |         17 |        125 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Middlewares\Third_Party\FreeRTOS\Source\include\queue.h                   | C++      |         92 |      1,512 |         52 |      1,656 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Middlewares\Third_Party\FreeRTOS\Source\include\semphr.h                  | C++      |         59 |      1,052 |         30 |      1,141 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Middlewares\Third_Party\FreeRTOS\Source\include\stack_macros.h            | C++      |         62 |         47 |         21 |        130 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Middlewares\Third_Party\FreeRTOS\Source\include\stream_buffer.h           | C++      |         55 |        777 |         28 |        860 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Middlewares\Third_Party\FreeRTOS\Source\include\task.h                    | C++      |        194 |      2,246 |        104 |      2,544 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Middlewares\Third_Party\FreeRTOS\Source\include\timers.h                  | C++      |         71 |      1,197 |         42 |      1,310 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Middlewares\Third_Party\FreeRTOS\Source\list.c                            | C        |         73 |         94 |         32 |        199 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Middlewares\Third_Party\FreeRTOS\Source\portable\GCC\ARM_CM4F\port.c      | C        |        369 |        302 |        105 |        776 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Middlewares\Third_Party\FreeRTOS\Source\portable\GCC\ARM_CM4F\portmacro.h | C++      |        132 |         66 |         46 |        244 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Middlewares\Third_Party\FreeRTOS\Source\portable\MemMang\heap_4.c         | C        |        288 |        138 |         67 |        493 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Middlewares\Third_Party\FreeRTOS\Source\queue.c                           | C        |      1,910 |        645 |        391 |      2,946 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Middlewares\Third_Party\FreeRTOS\Source\stream_buffer.c                   | C        |        831 |        259 |        174 |      1,264 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Middlewares\Third_Party\FreeRTOS\Source\tasks.c                           | C        |      3,192 |      1,341 |        778 |      5,311 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Middlewares\Third_Party\FreeRTOS\Source\timers.c                          | C        |        680 |        283 |        165 |      1,128 |
+| Total                                                                                                                          |          |     13,154 |     14,406 |      3,487 |     31,047 |
++--------------------------------------------------------------------------------------------------------------------------------+----------+------------+------------+------------+------------+

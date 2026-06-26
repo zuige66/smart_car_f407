@@ -75,6 +75,8 @@ void Error_Handler(void);
 #define AIN1_R_GPIO_Port GPIOB
 #define STBY_L_Pin GPIO_PIN_9
 #define STBY_L_GPIO_Port GPIOE
+#define BIN1_L_Pin GPIO_PIN_12
+#define BIN1_L_GPIO_Port GPIOE
 #define BIN2_L_Pin GPIO_PIN_15
 #define BIN2_L_GPIO_Port GPIOE
 #define AHT20_I2C2_SCL_Pin GPIO_PIN_10
@@ -97,10 +99,8 @@ void Error_Handler(void);
 #define WiFi_USART3_RX_GPIO_Port GPIOC
 #define AIN2_R_Pin GPIO_PIN_12
 #define AIN2_R_GPIO_Port GPIOC
-#define BIN1_L_Pin GPIO_PIN_0
-#define BIN1_L_GPIO_Port GPIOD
-#define BIN1_R_Pin GPIO_PIN_1
-#define BIN1_R_GPIO_Port GPIOB
+#define BIN1_R_Pin GPIO_PIN_0
+#define BIN1_R_GPIO_Port GPIOD
 #define X3_Pin GPIO_PIN_1
 #define X3_GPIO_Port GPIOD
 #define X4_Pin GPIO_PIN_2

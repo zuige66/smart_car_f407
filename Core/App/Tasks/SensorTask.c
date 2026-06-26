@@ -1,11 +1,10 @@
-/**
+﻿/**
  * @file SensorTask.c
- * @brief 传感器数据采集任务实现
- * @details 采集循迹传感器、温度传感器(AHT20/MLX90614)、MQ-8气体传感器数据
- */
+ * @brief 浼犳劅鍣ㄦ暟鎹噰闆嗕换鍔″疄鐜? * @details 閲囬泦寰抗浼犳劅鍣ㄣ€佹俯搴︿紶鎰熷櫒(AHT20/MLX90614)銆丮Q-8姘斾綋浼犳劅鍣ㄦ暟鎹? */
 
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "cmsis_os2.h"
 
@@ -15,6 +14,7 @@
 #include "WifiComm.h"
 
 #define SENSORTASK_VERBOSE_LOG 0
+#define SENSORTASK_DIAG_LOG 1
 
 extern osMessageQueueId_t TrackHandle;
 extern osMutexId_t I2CMutexHandle;
@@ -24,13 +24,14 @@ extern volatile uint32_t task_run_count[];
 #define MLX90614_REG_TA 0x06U
 #define MLX90614_REG_TOBJ1 0x07U
 
-volatile float g_mlx90614_ambient = 25.0f;   /* MLX90614环境温度 */
-volatile float g_mlx90614_object = 36.5f;    /* MLX90614物体温度 */
-volatile float g_aht20_temp = 25.0f;          /* AHT20温度 */
-volatile float g_aht20_humidity = 50.0f;      /* AHT20湿度 */
-volatile uint16_t g_mq8_adc_raw = 0U;         /* MQ-8 ADC原始值 */
-volatile uint8_t g_mq8_do = 0U;               /* MQ-8数字输出 */
-volatile uint8_t g_track_status = 0U;         /* 循迹传感器状态 */
+volatile float g_mlx90614_ambient = 25.0f;   /* MLX90614鐜娓╁害 */
+volatile float g_mlx90614_object = 36.5f;    /* MLX90614鐗╀綋娓╁害 */
+volatile float g_aht20_temp = 25.0f;          /* AHT20娓╁害 */
+volatile float g_aht20_humidity = 50.0f;      /* AHT20婀垮害 */
+volatile uint16_t g_mq8_adc_raw = 0U;         /* MQ-8 ADC鍘熷鍊?*/
+volatile uint8_t g_mq8_do = 0U;               /* MQ-8鏁板瓧杈撳嚭 */
+volatile uint8_t g_track_status = 0U;         /* 寰抗浼犳劅鍣ㄧ姸鎬?*/
+static uint32_t g_aht20_fail_count = 0U;
 
 static uint8_t Sensor_GetX1(void);
 static uint8_t Sensor_GetX2(void);
@@ -39,9 +40,7 @@ static uint8_t Sensor_GetX4(void);
 
 #if SENSORTASK_VERBOSE_LOG
 /**
- * @brief 打印循迹传感器原始数据
- * @param status 循迹传感器状态
- */
+ * @brief 鎵撳嵃寰抗浼犳劅鍣ㄥ師濮嬫暟鎹? * @param status 寰抗浼犳劅鍣ㄧ姸鎬? */
 static void Sensor_DebugTrackRaw(uint8_t status)
 {
     static uint32_t last_print_tick = 0U;
@@ -73,9 +72,7 @@ static void Sensor_DebugTrackRaw(uint8_t status)
 #endif
 
 /**
- * @brief 读取MQ-8传感器ADC值
- * @return ADC原始值
- */
+ * @brief 璇诲彇MQ-8浼犳劅鍣ˋDC鍊? * @return ADC鍘熷鍊? */
 static uint16_t Sensor_ReadMq8Adc(void)
 {
     uint16_t value = 0U;
@@ -91,11 +88,9 @@ static uint16_t Sensor_ReadMq8Adc(void)
 }
 
 /**
- * @brief 读取MLX90614寄存器
- * @param reg 寄存器地址
- * @param data 数据指针
- * @return HAL状态
- */
+ * @brief 璇诲彇MLX90614瀵勫瓨鍣? * @param reg 瀵勫瓨鍣ㄥ湴鍧€
+ * @param data 鏁版嵁鎸囬拡
+ * @return HAL鐘舵€? */
 static HAL_StatusTypeDef MLX90614_ReadReg(uint8_t reg, uint16_t *data)
 {
     uint8_t buf[3];
@@ -124,11 +119,10 @@ static HAL_StatusTypeDef MLX90614_ReadReg(uint8_t reg, uint16_t *data)
 }
 
 /**
- * @brief 读取MLX90614温度
- * @param reg 寄存器地址
- * @param temp_c 温度值指针(°C)
- * @return HAL状态
- */
+ * @brief 璇诲彇MLX90614娓╁害
+ * @param reg 瀵勫瓨鍣ㄥ湴鍧€
+ * @param temp_c 娓╁害鍊兼寚閽?掳C)
+ * @return HAL鐘舵€? */
 static HAL_StatusTypeDef MLX90614_ReadTemp(uint8_t reg, float *temp_c)
 {
     uint16_t raw;
@@ -142,8 +136,8 @@ static HAL_StatusTypeDef MLX90614_ReadTemp(uint8_t reg, float *temp_c)
 }
 
 /**
- * @brief 读取循迹传感器X1
- * @return X1状态(1-检测到黑线，0-未检测)
+ * @brief 璇诲彇寰抗浼犳劅鍣╔1
+ * @return X1鐘舵€?1-妫€娴嬪埌榛戠嚎锛?-鏈娴?
  */
 static uint8_t Sensor_GetX1(void)
 {
@@ -151,8 +145,8 @@ static uint8_t Sensor_GetX1(void)
 }
 
 /**
- * @brief 读取循迹传感器X2
- * @return X2状态(1-检测到黑线，0-未检测)
+ * @brief 璇诲彇寰抗浼犳劅鍣╔2
+ * @return X2鐘舵€?1-妫€娴嬪埌榛戠嚎锛?-鏈娴?
  */
 static uint8_t Sensor_GetX2(void)
 {
@@ -160,8 +154,8 @@ static uint8_t Sensor_GetX2(void)
 }
 
 /**
- * @brief 读取循迹传感器X3
- * @return X3状态(1-检测到黑线，0-未检测)
+ * @brief 璇诲彇寰抗浼犳劅鍣╔3
+ * @return X3鐘舵€?1-妫€娴嬪埌榛戠嚎锛?-鏈娴?
  */
 static uint8_t Sensor_GetX3(void)
 {
@@ -169,8 +163,8 @@ static uint8_t Sensor_GetX3(void)
 }
 
 /**
- * @brief 读取循迹传感器X4
- * @return X4状态(1-检测到黑线，0-未检测)
+ * @brief 璇诲彇寰抗浼犳劅鍣╔4
+ * @return X4鐘舵€?1-妫€娴嬪埌榛戠嚎锛?-鏈娴?
  */
 static uint8_t Sensor_GetX4(void)
 {
@@ -178,8 +172,7 @@ static uint8_t Sensor_GetX4(void)
 }
 
 /**
- * @brief 获取循迹传感器状态
- * @return 4位状态值，bit0-X1, bit1-X2, bit2-X3, bit3-X4
+ * @brief 鑾峰彇寰抗浼犳劅鍣ㄧ姸鎬? * @return 4浣嶇姸鎬佸€硷紝bit0-X1, bit1-X2, bit2-X3, bit3-X4
  */
 static uint8_t Sensor_GetTrackStatus(void)
 {
@@ -192,9 +185,7 @@ static uint8_t Sensor_GetTrackStatus(void)
 }
 
 /**
- * @brief 传感器采集任务入口函数
- * @param argument 任务参数（未使用）
- */
+ * @brief 浼犳劅鍣ㄩ噰闆嗕换鍔″叆鍙ｅ嚱鏁? * @param argument 浠诲姟鍙傛暟锛堟湭浣跨敤锛? */
 void StartSensorTask(void *argument)
 {
     float ambient = 25.0f;
@@ -217,6 +208,12 @@ void StartSensorTask(void *argument)
             g_aht20_humidity = aht20_humidity;
         }
     }
+#if SENSORTASK_DIAG_LOG
+    else {
+        const char msg[] = "[AHT20] init failed\r\n";
+        HAL_UART_Transmit(&BOARD_DEBUG_UART, (uint8_t *)msg, sizeof(msg) - 1U, 100U);
+    }
+#endif
 
     for (;;) {
         uint8_t status = Sensor_GetTrackStatus();
@@ -240,6 +237,22 @@ void StartSensorTask(void *argument)
             if (AHT20_Read(&aht20_temp, &aht20_humidity) == HAL_OK) {
                 g_aht20_temp = aht20_temp;
                 g_aht20_humidity = aht20_humidity;
+                g_aht20_fail_count = 0U;
+            } else {
+                g_aht20_fail_count++;
+#if SENSORTASK_DIAG_LOG
+                if ((g_aht20_fail_count == 1U) || ((g_aht20_fail_count % 10U) == 0U)) {
+                    char dbg[96];
+                    int temp10 = (int)(g_aht20_temp * 10.0f + ((g_aht20_temp >= 0.0f) ? 0.5f : -0.5f));
+                    int hum10 = (int)(g_aht20_humidity * 10.0f + ((g_aht20_humidity >= 0.0f) ? 0.5f : -0.5f));
+                    (void)snprintf(dbg, sizeof(dbg),
+                                   "[AHT20] read failed cnt=%lu last=%d.%1dC %d.%1d%%\r\n",
+                                   (unsigned long)g_aht20_fail_count,
+                                   temp10 / 10, abs(temp10 % 10),
+                                   hum10 / 10, abs(hum10 % 10));
+                    HAL_UART_Transmit(&BOARD_DEBUG_UART, (uint8_t *)dbg, (uint16_t)strlen(dbg), 100U);
+                }
+#endif
             }
             g_mq8_adc_raw = Sensor_ReadMq8Adc();
             g_mq8_do = Board_MQ8DoRead();
@@ -248,3 +261,5 @@ void StartSensorTask(void *argument)
         osDelay(80U);
     }
 }
+
+

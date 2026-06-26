@@ -1,0 +1,203 @@
+Date : 2026-06-18 15:11:59
+Directory : d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers
+Total : 158 files,  79170 codes, 57873 comments, 20724 blanks, all 157767 lines
+
+Languages
++----------+------------+------------+------------+------------+------------+
+| language | files      | code       | comment    | blank      | total      |
++----------+------------+------------+------------+------------+------------+
+| C++      |         98 |     65,075 |     44,605 |     16,693 |    126,373 |
+| C        |         60 |     14,095 |     13,268 |      4,031 |     31,394 |
++----------+------------+------------+------------+------------+------------+
+
+Directories
++---------------------------------------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| path                                                                                                                | files      | code       | comment    | blank      | total      |
++---------------------------------------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| .                                                                                                                   |        158 |     79,170 |     57,873 |     20,724 |    157,767 |
+| ..                                                                                                                  |         66 |     -6,698 |     -3,358 |     -1,677 |    -11,733 |
+| ..\Core                                                                                                             |         66 |     -6,698 |     -3,358 |     -1,677 |    -11,733 |
+| ..\Core\App                                                                                                         |         37 |     -3,851 |     -1,340 |       -813 |     -6,004 |
+| ..\Core\App\Driver                                                                                                  |          9 |       -464 |       -341 |       -128 |       -933 |
+| ..\Core\App\Module                                                                                                  |         14 |     -1,517 |       -502 |       -327 |     -2,346 |
+| ..\Core\App\Platform                                                                                                |          4 |       -247 |        -55 |        -55 |       -357 |
+| ..\Core\App\Tasks                                                                                                   |         10 |     -1,623 |       -442 |       -303 |     -2,368 |
+| ..\Core\Inc                                                                                                         |         13 |       -582 |       -455 |       -248 |     -1,285 |
+| ..\Core\Src                                                                                                         |         16 |     -2,265 |     -1,563 |       -616 |     -4,444 |
+| CMSIS                                                                                                               |         33 |     43,708 |     13,948 |     11,894 |     69,550 |
+| CMSIS\Device                                                                                                        |          3 |     13,930 |      1,142 |        949 |     16,021 |
+| CMSIS\Device\ST                                                                                                     |          3 |     13,930 |      1,142 |        949 |     16,021 |
+| CMSIS\Device\ST\STM32F4xx                                                                                           |          3 |     13,930 |      1,142 |        949 |     16,021 |
+| CMSIS\Device\ST\STM32F4xx\Include                                                                                   |          3 |     13,930 |      1,142 |        949 |     16,021 |
+| CMSIS\Include                                                                                                       |         30 |     29,778 |     12,806 |     10,945 |     53,529 |
+| STM32F4xx_HAL_Driver                                                                                                |         59 |     42,160 |     47,283 |     10,507 |     99,950 |
+| STM32F4xx_HAL_Driver\Inc                                                                                            |         38 |     22,210 |     31,470 |      5,179 |     58,859 |
+| STM32F4xx_HAL_Driver\Inc (Files)                                                                                    |         37 |     18,861 |     30,854 |      4,721 |     54,436 |
+| STM32F4xx_HAL_Driver\Inc\Legacy                                                                                     |          1 |      3,349 |        616 |        458 |      4,423 |
+| STM32F4xx_HAL_Driver\Src                                                                                            |         21 |     19,950 |     15,813 |      5,328 |     41,091 |
++---------------------------------------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+
+Files
++---------------------------------------------------------------------------------------------------------------------+----------+------------+------------+------------+------------+
+| filename                                                                                                            | language | code       | comment    | blank      | total      |
++---------------------------------------------------------------------------------------------------------------------+----------+------------+------------+------------+------------+
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\App\Driver\Aht20.c                                        | C        |       -111 |        -44 |        -28 |       -183 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\App\Driver\Aht20.h                                        | C++      |         -6 |        -16 |         -6 |        -28 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\App\Driver\RfidReader.c                                   | C        |        -69 |        -51 |        -15 |       -135 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\App\Driver\RfidReader.h                                   | C++      |        -10 |        -31 |        -10 |        -51 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\App\Driver\board_compat.h                                 | C++      |        -46 |         -8 |        -14 |        -68 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\App\Driver\motor.c                                        | C        |        -82 |        -38 |        -11 |       -131 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\App\Driver\motor.h                                        | C++      |        -17 |        -30 |        -11 |        -58 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\App\Driver\pid.c                                          | C        |        -94 |        -69 |        -20 |       -183 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\App\Driver\pid.h                                          | C++      |        -29 |        -54 |        -13 |        -96 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\App\Module\BatteryCtrl.c                                  | C        |        -22 |        -33 |         -7 |        -62 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\App\Module\BatteryCtrl.h                                  | C++      |         -9 |        -27 |         -9 |        -45 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\App\Module\Encoder.c                                      | C        |        -11 |        -18 |         -4 |        -33 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\App\Module\Encoder.h                                      | C++      |         -7 |        -15 |         -6 |        -28 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\App\Module\ObstacleCtrl.c                                 | C        |       -185 |        -62 |        -28 |       -275 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\App\Module\ObstacleCtrl.h                                 | C++      |         -8 |        -22 |         -8 |        -38 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\App\Module\SelfTest.c                                     | C        |       -178 |        -72 |        -50 |       -300 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\App\Module\SelfTest.h                                     | C++      |         -6 |        -14 |         -6 |        -26 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\App\Module\ThermalCtrl.c                                  | C        |       -108 |        -54 |        -20 |       -182 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\App\Module\ThermalCtrl.h                                  | C++      |        -10 |        -36 |        -10 |        -56 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\App\Module\TrackCtrl.c                                    | C        |       -269 |       -101 |        -36 |       -406 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\App\Module\TrackCtrl.h                                    | C++      |        -10 |        -32 |        -10 |        -52 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\App\Module\WifiComm.c                                     | C        |       -676 |         -9 |       -128 |       -813 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\App\Module\WifiComm.h                                     | C++      |        -18 |         -7 |         -5 |        -30 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\App\Platform\runtime_diag.c                               | C        |       -105 |        -11 |        -21 |       -137 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\App\Platform\runtime_diag.h                               | C++      |        -30 |        -22 |         -8 |        -60 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\App\Platform\stm32f4xx_hal_timebase_tim_user.c            | C        |        -43 |        -12 |        -11 |        -66 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\App\Platform\stm32f4xx_it_user.c                          | C        |        -69 |        -10 |        -15 |        -94 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\App\Tasks\Ctrl.h                                          | C++      |        -55 |        -44 |        -16 |       -115 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\App\Tasks\CtrlTask.c                                      | C        |       -335 |        -70 |        -54 |       -459 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\App\Tasks\DriverTask.c                                    | C        |       -138 |        -25 |        -14 |       -177 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\App\Tasks\HCSR04.c                                        | C        |       -149 |        -36 |        -33 |       -218 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\App\Tasks\LedTask.c                                       | C        |        -46 |        -13 |        -12 |        -71 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\App\Tasks\OledTask.c                                      | C        |       -121 |        -46 |        -20 |       -187 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\App\Tasks\RfidTask.c                                      | C        |       -395 |       -121 |        -79 |       -595 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\App\Tasks\SensorTask.c                                    | C        |       -167 |        -49 |        -34 |       -250 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\App\Tasks\UartTask.c                                      | C        |       -194 |        -25 |        -33 |       -252 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\App\Tasks\WifiTask.c                                      | C        |        -23 |        -13 |         -8 |        -44 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\Inc\FreeRTOSConfig.h                                      | C++      |        -72 |        -79 |        -22 |       -173 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\Inc\adc.h                                                 | C++      |        -12 |        -27 |        -14 |        -53 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\Inc\font.h                                                | C++      |        -28 |         -9 |         -7 |        -44 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\Inc\gpio.h                                                | C++      |        -11 |        -27 |        -12 |        -50 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\Inc\i2c.h                                                 | C++      |        -16 |        -27 |        -16 |        -59 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\Inc\main.h                                                | C++      |        -73 |        -39 |        -20 |       -132 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\Inc\oled.h                                                | C++      |        -28 |          0 |         -7 |        -35 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\Inc\runtime_diag.h                                        | C++      |         -4 |          0 |         -3 |         -7 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\Inc\spi.h                                                 | C++      |        -12 |        -27 |        -14 |        -53 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\Inc\stm32f4xx_hal_conf.h                                  | C++      |       -278 |       -132 |        -86 |       -496 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\Inc\stm32f4xx_it.h                                        | C++      |        -17 |        -34 |        -15 |        -66 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\Inc\tim.h                                                 | C++      |        -17 |        -27 |        -17 |        -61 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\Inc\usart.h                                               | C++      |        -14 |        -27 |        -15 |        -56 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\Src\adc.c                                                 | C        |        -50 |        -51 |        -29 |       -130 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\Src\font.c                                                | C        |       -419 |        -12 |        -12 |       -443 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\Src\freertos.c                                            | C        |       -128 |       -113 |        -44 |       -285 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\Src\gpio.c                                                | C        |        -73 |        -57 |        -32 |       -162 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\Src\i2c.c                                                 | C        |       -117 |        -99 |        -58 |       -274 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\Src\main.c                                                | C        |        -84 |       -104 |        -43 |       -231 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\Src\oled.c                                                | C        |       -474 |       -264 |        -59 |       -797 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\Src\spi.c                                                 | C        |        -44 |        -51 |        -26 |       -121 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\Src\stm32f4xx_hal_msp.c                                   | C        |         -7 |        -53 |        -24 |        -84 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\Src\stm32f4xx_hal_timebase_tim.c                          | C        |        -48 |        -64 |        -18 |       -130 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\Src\stm32f4xx_it.c                                        | C        |        -47 |       -110 |        -39 |       -196 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\Src\syscalls.c                                            | C        |       -162 |        -47 |        -36 |       -245 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\Src\sysmem.c                                              | C        |        -28 |        -51 |         -9 |        -88 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\Src\system_stm32f4xx.c                                    | C        |       -347 |       -318 |        -83 |       -748 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\Src\tim.c                                                 | C        |       -165 |        -95 |        -62 |       -322 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Core\Src\usart.c                                               | C        |        -72 |        -74 |        -42 |       -188 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\CMSIS\Device\ST\STM32F4xx\Include\stm32f407xx.h        | C++      |     13,746 |        978 |        890 |     15,614 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\CMSIS\Device\ST\STM32F4xx\Include\stm32f4xx.h          | C++      |        170 |         94 |         38 |        302 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\CMSIS\Device\ST\STM32F4xx\Include\system_stm32f4xx.h   | C++      |         14 |         70 |         21 |        105 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\CMSIS\Include\cachel1_armv7.h                          | C++      |        244 |        100 |         68 |        412 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\CMSIS\Include\cmsis_armcc.h                            | C++      |        392 |        356 |        141 |        889 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\CMSIS\Include\cmsis_armclang.h                         | C++      |        669 |        599 |        236 |      1,504 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\CMSIS\Include\cmsis_armclang_ltm.h                     | C++      |        981 |        593 |        355 |      1,929 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\CMSIS\Include\cmsis_compiler.h                         | C++      |        207 |         52 |         25 |        284 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\CMSIS\Include\cmsis_gcc.h                              | C++      |      1,204 |        620 |        388 |      2,212 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\CMSIS\Include\cmsis_iccarm.h                           | C++      |        795 |         47 |        161 |      1,003 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\CMSIS\Include\cmsis_version.h                          | C++      |         13 |         23 |          4 |         40 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\CMSIS\Include\core_armv81mml.h                         | C++      |      2,483 |        769 |        977 |      4,229 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\CMSIS\Include\core_armv8mbl.h                          | C++      |      1,181 |        605 |        437 |      2,223 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\CMSIS\Include\core_armv8mml.h                          | C++      |      1,821 |        729 |        660 |      3,210 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\CMSIS\Include\core_cm0.h                               | C++      |        444 |        327 |        182 |        953 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\CMSIS\Include\core_cm0plus.h                           | C++      |        530 |        346 |        212 |      1,088 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\CMSIS\Include\core_cm1.h                               | C++      |        454 |        338 |        188 |        980 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\CMSIS\Include\core_cm23.h                              | C++      |      1,229 |        611 |        458 |      2,298 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\CMSIS\Include\core_cm3.h                               | C++      |      1,055 |        468 |        421 |      1,944 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\CMSIS\Include\core_cm33.h                              | C++      |      1,867 |        732 |        679 |      3,278 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\CMSIS\Include\core_cm35p.h                             | C++      |      1,867 |        732 |        679 |      3,278 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\CMSIS\Include\core_cm4.h                               | C++      |      1,186 |        485 |        459 |      2,130 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\CMSIS\Include\core_cm55.h                              | C++      |      2,825 |        861 |      1,132 |      4,818 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\CMSIS\Include\core_cm7.h                               | C++      |      1,350 |        499 |        518 |      2,367 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\CMSIS\Include\core_cm85.h                              | C++      |      2,739 |        844 |      1,090 |      4,673 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\CMSIS\Include\core_sc000.h                             | C++      |        492 |        335 |        204 |      1,031 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\CMSIS\Include\core_sc300.h                             | C++      |      1,038 |        467 |        413 |      1,918 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\CMSIS\Include\core_starmc1.h                           | C++      |      2,069 |        797 |        727 |      3,593 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\CMSIS\Include\mpu_armv7.h                              | C++      |        125 |        125 |         26 |        276 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\CMSIS\Include\mpu_armv8.h                              | C++      |        174 |        135 |         44 |        353 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\CMSIS\Include\pac_armv81.h                             | C++      |        116 |         71 |         20 |        207 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\CMSIS\Include\pmu_armv8.h                              | C++      |        209 |        100 |         29 |        338 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\CMSIS\Include\tz_context.h                             | C++      |         19 |         40 |         12 |         71 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Inc\Legacy\stm32_hal_legacy.h     | C++      |      3,349 |        616 |        458 |      4,423 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Inc\stm32f4xx_hal.h               | C++      |        128 |        138 |         32 |        298 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Inc\stm32f4xx_hal_adc.h           | C++      |        350 |        444 |        105 |        899 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Inc\stm32f4xx_hal_adc_ex.h        | C++      |        154 |        213 |         41 |        408 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Inc\stm32f4xx_hal_cortex.h        | C++      |        185 |        171 |         55 |        411 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Inc\stm32f4xx_hal_def.h           | C++      |        108 |         75 |         30 |        213 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Inc\stm32f4xx_hal_dma.h           | C++      |        318 |        382 |        103 |        803 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Inc\stm32f4xx_hal_dma_ex.h        | C++      |         18 |         66 |         19 |        103 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Inc\stm32f4xx_hal_exti.h          | C++      |        180 |        142 |         45 |        367 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Inc\stm32f4xx_hal_flash.h         | C++      |        102 |        268 |         56 |        426 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Inc\stm32f4xx_hal_flash_ex.h      | C++      |        634 |        296 |        134 |      1,064 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Inc\stm32f4xx_hal_flash_ramfunc.h | C++      |         17 |         45 |         15 |         77 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Inc\stm32f4xx_hal_gpio.h          | C++      |        110 |        170 |         46 |        326 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Inc\stm32f4xx_hal_gpio_ex.h       | C++      |        788 |        601 |        202 |      1,591 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Inc\stm32f4xx_hal_i2c.h           | C++      |        285 |        348 |        109 |        742 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Inc\stm32f4xx_hal_i2c_ex.h        | C++      |         19 |         76 |         21 |        116 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Inc\stm32f4xx_hal_pwr.h           | C++      |        111 |        259 |         67 |        437 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Inc\stm32f4xx_hal_pwr_ex.h        | C++      |        117 |        180 |         44 |        341 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Inc\stm32f4xx_hal_rcc.h           | C++      |        618 |        690 |        151 |      1,459 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Inc\stm32f4xx_hal_rcc_ex.h        | C++      |      4,146 |      2,440 |        605 |      7,191 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Inc\stm32f4xx_hal_spi.h           | C++      |        253 |        380 |        101 |        734 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Inc\stm32f4xx_hal_tim.h           | C++      |        945 |        970 |        243 |      2,158 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Inc\stm32f4xx_hal_tim_ex.h        | C++      |        153 |        159 |         46 |        358 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Inc\stm32f4xx_hal_uart.h          | C++      |        294 |        504 |        112 |        910 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Inc\stm32f4xx_ll_adc.h            | C++      |      1,111 |      3,362 |        310 |      4,783 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Inc\stm32f4xx_ll_bus.h            | C++      |        425 |      1,614 |         67 |      2,106 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Inc\stm32f4xx_ll_cortex.h         | C++      |        196 |        386 |         66 |        648 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Inc\stm32f4xx_ll_dma.h            | C++      |        745 |      1,910 |        214 |      2,869 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Inc\stm32f4xx_ll_exti.h           | C++      |        168 |        695 |         92 |        955 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Inc\stm32f4xx_ll_gpio.h           | C++      |        189 |        725 |         68 |        982 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Inc\stm32f4xx_ll_i2c.h            | C++      |        559 |      1,151 |        181 |      1,891 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Inc\stm32f4xx_ll_pwr.h            | C++      |        357 |        545 |         84 |        986 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Inc\stm32f4xx_ll_rcc.h            | C++      |      1,974 |      4,809 |        319 |      7,102 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Inc\stm32f4xx_ll_spi.h            | C++      |        595 |      1,225 |        223 |      2,043 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Inc\stm32f4xx_ll_system.h         | C++      |        535 |      1,067 |        110 |      1,712 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Inc\stm32f4xx_ll_tim.h            | C++      |      1,197 |      2,562 |        338 |      4,097 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Inc\stm32f4xx_ll_usart.h          | C++      |        707 |      1,594 |        221 |      2,522 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Inc\stm32f4xx_ll_utils.h          | C++      |         70 |        192 |         46 |        308 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal.c               | C        |        197 |        350 |         70 |        617 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_adc.c           | C        |        878 |        972 |        261 |      2,111 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_adc_ex.c        | C        |        473 |        495 |        148 |      1,116 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_cortex.c        | C        |        139 |        342 |         58 |        539 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_dma.c           | C        |        631 |        479 |        196 |      1,306 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_dma_ex.c        | C        |         99 |        168 |         47 |        314 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_exti.c          | C        |        212 |        262 |         80 |        554 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_flash.c         | C        |        300 |        379 |         98 |        777 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_flash_ex.c      | C        |        564 |        611 |        170 |      1,345 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_flash_ramfunc.c | C        |         30 |        124 |         19 |        173 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_gpio.c          | C        |        187 |        289 |         58 |        534 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_i2c.c           | C        |      4,045 |      2,394 |      1,129 |      7,568 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_i2c_ex.c        | C        |         46 |        105 |         32 |        183 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_pwr.c           | C        |        147 |        401 |         51 |        599 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_pwr_ex.c        | C        |        206 |        323 |         72 |        601 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_rcc.c           | C        |        528 |        491 |        106 |      1,125 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_rcc_ex.c        | C        |      2,261 |      1,200 |        373 |      3,834 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_spi.c           | C        |      2,208 |      1,269 |        469 |      3,946 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_tim.c           | C        |      3,958 |      2,621 |      1,051 |      7,630 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_tim_ex.c        | C        |      1,079 |        984 |        348 |      2,411 |
+| d:\develop\Workplace\VscodeWorkplace\stm32\smart_car\Drivers\STM32F4xx_HAL_Driver\Src\stm32f4xx_hal_uart.c          | C        |      1,762 |      1,554 |        492 |      3,808 |
+| Total                                                                                                               |          |     79,170 |     57,873 |     20,724 |    157,767 |
++---------------------------------------------------------------------------------------------------------------------+----------+------------+------------+------------+------------+

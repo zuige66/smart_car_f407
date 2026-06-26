@@ -113,6 +113,13 @@ const osThreadAttr_t WifiTask_attributes = {
   .stack_size = 512 * 4,
   .priority = (osPriority_t) osPriorityLow,
 };
+/* Definitions for AITask */
+osThreadId_t AITaskHandle;
+const osThreadAttr_t AITask_attributes = {
+  .name = "AITask",
+  .stack_size = 512 * 4,
+  .priority = (osPriority_t) osPriorityLow,
+};
 /* Definitions for LEDFlash */
 osMessageQueueId_t LEDFlashHandle;
 const osMessageQueueAttr_t LEDFlash_attributes = {
@@ -158,6 +165,7 @@ extern void StartDriverTask(void *argument);
 extern void StartCtrlTask(void *argument);
 extern void StartRfidTask(void *argument);
 extern void StartWifiTask(void *argument);
+extern void StartAITask(void *argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
@@ -249,6 +257,9 @@ void MX_FREERTOS_Init(void) {
 
   /* creation of WifiTask */
   WifiTaskHandle = osThreadNew(StartWifiTask, NULL, &WifiTask_attributes);
+
+  /* creation of AITask */
+  AITaskHandle = osThreadNew(StartAITask, NULL, &AITask_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */

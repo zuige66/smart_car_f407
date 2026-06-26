@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.22)
+﻿cmake_minimum_required(VERSION 3.22)
 
 #
 # This file is generated only once,
@@ -48,6 +48,7 @@ target_compile_definitions(stm32cubemx INTERFACE HSE_VALUE=8000000U)
 # Link directories setup
 target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user defined library search paths
+    ${CMAKE_SOURCE_DIR}/Core/AI
 )
 
 # Add sources to executable
@@ -66,6 +67,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/App/Tasks/SensorTask.c
     Core/App/Tasks/UartTask.c
     Core/App/Tasks/WifiTask.c
+    Core/App/Tasks/AITask.c
     Core/App/Driver/Aht20.c
     Core/App/Driver/motor.c
     Core/App/Driver/pid.c
@@ -77,6 +79,8 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/App/Module/ThermalCtrl.c
     Core/App/Module/TrackCtrl.c
     Core/App/Module/WifiComm.c
+    Core/App/Module/AIStatus.c
+    Core/App/Module/AIAnomalyDetect.c
 )
 
 # Add include paths
@@ -85,6 +89,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/Core/App/Driver
     ${CMAKE_SOURCE_DIR}/Core/App/Module
     ${CMAKE_SOURCE_DIR}/Core/App/Platform
+    ${CMAKE_SOURCE_DIR}/Core/AI
 )
 
 # Add project symbols (macros)
@@ -96,8 +101,11 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
 list(REMOVE_ITEM CMAKE_C_IMPLICIT_LINK_LIBRARIES ob)
 
 # Add linked libraries
+# Add linked libraries
 target_link_libraries(${CMAKE_PROJECT_NAME}
     stm32cubemx
 
     # Add user defined libraries
+    neai
+    m
 )
