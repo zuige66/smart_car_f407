@@ -65,6 +65,7 @@
 | **WifiTask.c** | **WiFi 任务入口** — 每 20ms 调用 `Wifi_TaskStep()`，处理 ESP8266 AT 初始化、TCP 数据收发、链路存活保活。 |
 | **UartTask.c** | **调试串口任务** — 通过 USART2 接收命令（start/stop/pause/evacuate 等）+ ESP8266 桥接模式切换（esp/esp_off/+++）。 |
 | **OledTask.c** | **OLED 显示任务** — 双页面循环显示，每 2s 切换。页面 0：状态 + 距离 + MQ8 + 温湿度；页面 1：AHT20 + 循迹二进制。 |
+| **AITask.c** | **AI 异常检测任务** — 使用 NanoEdge AI 预训练模型，每 200ms 从 MLX90614 连续采样 32 次物体温度（间隔 3ms），进行异常检测。输出相似度分数 (0-100)，通过 `AIStatus` 模块供 CtrlTask 状态机决策和 OLED/WiFi 显示。 |
 | **LedTask.c** | **LED 心跳任务** — 每 500ms 切换状态，计数发送到 `LEDFlashHandle` 队列。无实际 LED 硬件 (`BOARD_HAS_STATUS_LED=0`)。 |
 | **BatteryCtrl.c** / **BatteryCtrl.h** | **电池管理** — 当前为桩代码，固定返回 100% / 12V。`BatteryCtrl_Return()` 返回空命令（未实现低电量返航逻辑）。 |
 | **Encoder.c** / **Encoder.h** | **编码器** — 桩代码 (`BOARD_HAS_ENCODER=0`)，固定返回 0。 |
@@ -72,13 +73,15 @@
 | **pid.c** / **pid.h** | **增量式 PID** — 微分作用在测量值上（避免设定值突变冲击），一阶低通滤波微分项，积分分离抗饱和。 |
 | **Aht20.c** / **Aht20.h** | **AHT20 温湿度驱动** — I2C2 读取温湿度传感器。 |
 | **SelfTest.c** / **SelfTest.h** | **上电自检** — 8 项测试：UART / OLED / MLX90614 / MQ8 / 循迹 / HCSR04 / 电机 / 蜂鸣器。 |
+| **AIAnomalyDetect.c** / **AIAnomalyDetect.h** | **异常检测封装** — 封装 NanoEdge AI 库的 `init`/`detect` 接口，提供预训练模式支持、相似度阈值判定、输入布局配置。 |
+| **AIStatus.c** / **AIStatus.h** | **AI 状态管理** — 通过 `volatile` 变量实现 AI 状态（ready / similarity / score_valid）的跨任务安全读写。 |
 | **board_compat.h** | **板级兼容层** — 统一外设宏映射（UART、I2C、PWM 定时器）、蜂鸣器控制、电机待机、MQ8 读取。 |
 
 ### 2.2 CubeMX 生成文件 (`Core/Src/`, `Core/Inc/`)
 
 | 文件 | 功能 |
 |---|---|
-| **freertos.c** | FreeRTOS 初始化：创建 9 个任务 + 6 个队列 + 1 个互斥锁 |
+| **freertos.c** | FreeRTOS 初始化：创建 10 个任务 + 6 个队列 + 1 个互斥锁 |
 | **main.c** | 系统入口，HAL 初始化，调用 `MX_FREERTOS_Init()` |
 | **gpio.c** | GPIO 初始化（所有引脚模式/上下拉/速度） |
 | **spi.c** | SPI1 初始化（PA5/PA6/PA7，Master，8bit，Mode 0） |
@@ -103,6 +106,7 @@
 | `StartCtrlTask` | CtrlTask | osPriorityNormal (0) | 2048 B | 30ms (`osDelay(30)`) | `[6]` |
 | `StartRfidTask` | myRfidTask | osPriorityLow (-2) | 1024 B | 200ms 轮询 + EXTI IRQ 唤醒 | `[7]` |
 | `StartWifiTask` | WifiTask | osPriorityLow (-2) | 2048 B | 20ms | `[8]` |
+| `StartAITask` | AITask | osPriorityLow (-2) | 1024 B | 200ms | `[9]` |
 
 ### 3.2 任务间通信
 
@@ -839,13 +843,13 @@ T=3.0s:  WiFi 遥测发送 ← 从缓存读取 rfid_loc = "place_1" ✅
 
 **遥测 JSON 格式：**
 ```json
-{"type":"telemetry","MLX_obj":36.5,"MQ8":1230.5,"AHT_temp":25.4,"AHT_hum":55.2,"dist":12.3,"track":5,"track_bin":"0101","rfid_loc":"place_1","state":"start_patrol"}
+{"type":"telemetry","MLX_obj":36.5,"MQ8":1230.5,"AHT_temp":25.4,"AHT_hum":55.2,"dist":12.3,"track":5,"track_bin":"0101","rfid_loc":"place_1","state":"start_patrol","ai_score":87,"ai_ready":1}
 ```
 
 **字段说明：**
 
 | 字段 | 类型 | 示例 | 说明 |
-|---|---|---|---|---|
+|---|---|---|---|
 | `type` | string | `"telemetry"` | 固定标识 |
 | `MLX_obj` | float(1位小数) | `36.5` | MLX90614 物体温度 °C（红外测温） |
 | `MQ8` | float(1位小数) | `1230.5` | MQ-8 ADC 值 ×10 再格式化 |
@@ -856,6 +860,8 @@ T=3.0s:  WiFi 遥测发送 ← 从缓存读取 rfid_loc = "place_1" ✅
 | `track_bin` | string | `"0101"` | 循迹二进制 |X4 X3 X2 X1| |
 | `rfid_loc` | string | `"place_1"` | RFID 最新标签位置（缓存） |
 | `state` | string | `"start_patrol"` | 系统状态名 |
+| `ai_score` | uint8 | `87` | AI 异常检测相似度 (0-100)，100=正常 |
+| `ai_ready` | uint8 | `1` | AI 是否就绪 (0/1) |
 
 **特殊：** `Ctrl_HandleRfidEvent` 中 place_N 测量结束后也会调用 `Wifi_SendTelemetry(&data)` 立即发送一次遥测。
 
@@ -895,7 +901,7 @@ T=3.0s:  WiFi 遥测发送 ← 从缓存读取 rfid_loc = "place_1" ✅
 
 **遥测 (telemetry)：**
 ```json
-{"type":"telemetry","MLX_obj":<float>,"MQ8":<float>,"AHT_temp":<float>,"AHT_hum":<float>,"dist":<float>,"track":<int>,"track_bin":"<str>","rfid_loc":"<str>","state":"<str>"}
+{"type":"telemetry","MLX_obj":<float>,"MQ8":<float>,"AHT_temp":<float>,"AHT_hum":<float>,"dist":<float>,"track":<int>,"track_bin":"<str>","rfid_loc":"<str>","state":"<str>","ai_score":<uint>,"ai_ready":<uint>}
 ```
 
 **应答 (ack)：**
@@ -992,11 +998,17 @@ typedef enum {
 1. rfid_return_home_active == true     → STATE_LOW_BATTERY
 2. manual_override_enabled == true     → manual_override_state
 3. !system_started                     → STATE_STANDBY
-4. temperature ≥ 31°C                  → STATE_EMERGENCY
-5. temperature ≥ 30°C                  → STATE_THERMAL_WARNING
-6. temperature ≥ 29°C                  → STATE_THERMAL_ALERT
-7. else                                → STATE_PATROL
+4. AI 未就绪或分数无效                  → STATE_PATROL
+5. AI 相似度 ≥ 70                      → STATE_PATROL
+6. AI 相似度 50~69                     → STATE_THERMAL_ALERT
+7. AI 相似度 30~49                     → STATE_THERMAL_WARNING
+8. AI 相似度 < 30                      → STATE_EMERGENCY
 ```
+
+AI 分数阈值定义（`AIAnomalyDetect.h`）：
+- `AI_SCORE_NORMAL_MIN` = 70 — 低于此值进入预警
+- `AI_SCORE_WARNING_MIN` = 50 — 低于此值进入报警
+- `AI_SCORE_ALARM_MIN` = 30 — 低于此值紧急撤离
 
 ### 14.4 温度状态防抖 (5000ms)
 
@@ -1075,12 +1087,12 @@ MQ8:<ADC值> D:<0/1>    ← MQ-8 模拟值 + 数字值
 T:<温度> H:<湿度>       ← 温度 + 湿度
 ```
 
-### 15.3 页面 1 — 环境 + 循迹
+### 15.3 页面 1 — 环境 + 循迹 + AI
 
 ```
 AHT:<温度> H:<湿度>     ← AHT20 温度 + 湿度
 TRACK:<bit3><bit2><bit1><bit0>  ← 循迹传感器二进制
-(空)
+AI:<相似度>              ← AI 异常检测分数 (0-100)，未就绪显示 AI:--
 (空)
 ```
 
@@ -1152,6 +1164,9 @@ System Ready!
 [CTRL] -> RETURN HOME spin 180
 [CTRL] Return home done, resume patrol
 
+// AI 异常检测 (每 1s)
+[AI] ready=1 valid=1 score=87 mlx_obj=36.5
+
 // 调试串口命令反馈
 [CMD] start
 [CMD] stop
@@ -1209,6 +1224,9 @@ Warning: Some modules failed!
 | **SelfTest** | ✅ | 8 项上电自检 |
 | **motor** | ✅ | TB6612FNG 驱动、PWM 0~1000 |
 | **pid** | ✅ | 增量式 PID、微分滤波、积分分离 |
+| **AITask** | ✅ | NanoEdge AI 预训练异常检测，MLX90614 连续 32 采样，200ms 周期 |
+| **AIAnomalyDetect** | ✅ | NanoEdge AI 库封装，预训练模式，相似度阈值判定 |
+| **AIStatus** | ✅ | volatile 变量跨任务安全读写 |
 | **BatteryCtrl** | 🟡 | 桩代码 — 固定 100%/12V，低电量返航未实现 |
 | **Encoder** | 🟡 | 桩代码 — `BOARD_HAS_ENCODER=0` |
 | **AHT20** | 🟡 | I2C2 地址已映射，传感器硬件未验证 |
@@ -1248,4 +1266,4 @@ cmake --build --preset Debug
 
 ---
 
-*文档版本: 2026-06-17 | 对应源码 git HEAD*
+*文档版本: 2026-06-26 | 对应源码 git HEAD*

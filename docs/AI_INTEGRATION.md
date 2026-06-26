@@ -2,7 +2,7 @@
 
 ## 概述
 
-本项目集成了 NanoEdge AI 库，用于传感器数据的异常检测。该库专为 STM32F4 系列 MCU 优化，支持 Cortex-M4 硬件浮点运算。
+本项目集成了 NanoEdge AI 库，使用**预训练异常检测模型**对 MLX90614 红外温度传感器数据进行实时异常检测。
 
 ## 文件结构
 
@@ -10,133 +10,126 @@
 smart_car/
 ├── Core/
 │   ├── AI/
-│   │   ├── NanoEdgeAI.h      # AI库头文件
-│   │   └── libneai.a         # AI静态库
+│   │   ├── NanoEdgeAI.h      # AI库头文件 (API定义)
+│   │   └── libneai.a         # AI静态库 (预编译，含预训练模型)
 │   └── App/
+│       ├── Tasks/
+│       │   └── AITask.c       # AI FreeRTOS任务 (主循环)
 │       └── Module/
-│           ├── AIAnomalyDetect.h    # 异常检测模块头文件
-│           ├── AIAnomalyDetect.c    # 异常检测模块实现
-│           └── AIIntegration_Example.c  # 集成示例
+│           ├── AIAnomalyDetect.h    # 异常检测封装层
+│           ├── AIAnomalyDetect.c
+│           ├── AIStatus.h           # AI状态跨任务读写
+│           └── AIStatus.c
 └── docs/
     └── AI_INTEGRATION.md     # 本文档
 ```
 
-## 技术规格
+## 工作原理
 
-- **MCU**: STM32F407 (Cortex-M4)
-- **输入信号长度**: 32个float
-- **输入轴数**: 1
-- **最小学习样本数**: 298
-- **内存占用**: RAM ~224字节, Flash ~48字节
-- **算法**: ZSM (Z-Score Method) 异常检测
-- **性能**: 准确率 99.12%, 主KPI 99.96%
+NanoEdge AI 异常检测的核心思路：
 
-## 使用步骤
+1. **预训练模型**：NanoEdge AI Studio 根据正常数据训练好模型，嵌入 `libneai.a` 中
+2. **输入**：32 个 float 组成的时间序列信号
+3. **输出**：相似度 (0-100)，100 = 完全正常，0 = 完全异常
+4. **判定**：低于阈值认为异常
 
-### 1. 初始化
+## 当前配置
 
-```c
-#include "AIAnomalyDetect.h"
+| 项目 | 值 |
+|---|---|
+| 数据源 | MLX90614 物体温度 (红外测温) |
+| 采样方式 | 连续读取 32 次，间隔 3ms |
+| 信号长度 | 32 个 float (`NEAI_INPUT_SIGNAL_LENGTH`) |
+| 轴数 | 1 (`NEAI_INPUT_AXIS_NUMBER`) |
+| 模式 | 预训练 (`use_pretrained = true`) |
+| 任务周期 | 200ms |
+| 采样耗时 | ~96ms (32 × 3ms) |
 
-// 在系统启动后初始化
-if (!AI_AnomalyDetect_Init()) {
-    // 初始化失败处理
-}
+## 运行流程
+
+```
+开机
+  ↓
+AI_AnomalyDetect_SetUsePretrained(1U)
+  ↓
+AI_AnomalyDetect_Init()  →  加载预训练模型，立即就绪
+  ↓
+osDelay(2000)  →  等待传感器稳定
+  ↓
+┌─ 每 200ms 循环 ──────────────────────────────┐
+│                                                │
+│  连续读取 MLX90614 × 32 次 (间隔 3ms)          │
+│           ↓                                    │
+│  neai_anomalydetection_detect(buffer, &score)  │
+│           ↓                                    │
+│  AI_StatusSet(ready=1, score, valid=1)         │
+│           ↓                                    │
+│  → OLED 显示 AI:xxx                            │
+│  → WiFi 遥测 ai_score / ai_ready               │
+│  → CtrlTask 状态机决策                          │
+└────────────────────────────────────────────────┘
 ```
 
-### 2. 学习阶段
+## 传感器数据准备
 
-学习阶段需要收集正常状态下的传感器数据，至少298个样本：
-
-```c
-float sensor_data[32];
-
-// 准备传感器数据 (32个float)
-// 例如: 温度、湿度、加速度等
-Prepare_Sensor_Data(sensor_data);
-
-AI_LearnStatus_t status = AI_AnomalyDetect_Learn(sensor_data);
-
-switch (status) {
-    case AI_LEARN_DONE:
-        // 学习完成
-        break;
-    case AI_LEARN_IN_PROGRESS:
-        // 继续学习
-        break;
-    case AI_LEARN_ERROR:
-        // 错误处理
-        break;
-}
-```
-
-### 3. 检测阶段
-
-学习完成后，可以进行异常检测：
+从 MLX90614 红外温度传感器连续快速采样 32 次，形成时间序列：
 
 ```c
-float sensor_data[32];
-uint8_t similarity;
-
-Prepare_Sensor_Data(sensor_data);
-
-AI_DetectResult_t result = AI_AnomalyDetect_Check(sensor_data, &similarity);
-
-if (result == AI_DETECT_OK) {
-    // similarity: 0-100, 100表示完全正常
-    if (AI_AnomalyDetect_IsAnomaly(similarity, 80)) {
-        // 检测到异常!
-        // 触发报警、停止电机等
+static void AI_PrepareSensorData(float *buffer)
+{
+    for (uint8_t i = 0; i < NEAI_INPUT_SIGNAL_LENGTH; i++) {
+        buffer[i] = AI_ReadMlx90614Object();  // I2C读取，带互斥锁+重试
+        osDelay(3U);
     }
 }
 ```
 
-## 数据准备指南
+每次读取通过 `HAL_I2C_Mem_Read` 直接访问 MLX90614 的 `TOBJ1` 寄存器 (0x07)，使用 `I2CMutexHandle` 互斥锁保护 I2C 总线。
 
-输入缓冲区需要32个float，可以根据应用场景灵活分配：
+## AI 状态如何影响系统状态机
 
-### 方案1: 单传感器 (32个采样点)
+CtrlTask 的 `Ctrl_DetermineState()` 根据 AI 相似度分数决定系统状态：
+
+| 相似度 | 系统状态 | 行为 |
+|---|---|---|
+| ≥ 70 | STATE_PATROL | 正常巡逻 |
+| 50 ~ 69 | STATE_THERMAL_ALERT | 预警，蜂鸣器关 |
+| 30 ~ 49 | STATE_THERMAL_WARNING | 报警，速度 50%，蜂鸣器开 |
+| < 30 | STATE_EMERGENCY | 紧急撤离 |
+
+阈值定义 (`AIAnomalyDetect.h`)：
 ```c
-// 适合: 振动检测、声音检测
-buffer[0] = sensor_sample_0;
-buffer[1] = sensor_sample_1;
-// ... 共32个采样点
+#define AI_SCORE_NORMAL_MIN     70U
+#define AI_SCORE_WARNING_MIN    50U
+#define AI_SCORE_ALARM_MIN      30U
 ```
 
-### 方案2: 多传感器组合
-```c
-// 适合: 综合环境监测
-// [0-7]: 温度 (8个采样点)
-// [8-15]: 湿度 (8个采样点)
-// [16-23]: 气体浓度 (8个采样点)
-// [24-31]: 加速度 (8个采样点)
+**防抖机制**：从高警报状态退回 PATROL 时，需保持 5 秒确认。
+
+## 串口调试输出
+
+每 1 秒输出一次：
+```
+[AI] ready=1 valid=1 score=87 mlx_obj=36.5
 ```
 
-### 方案3: 当前小车配置
-```c
-// [0-7]:   MLX90614物体温度
-// [8-15]:  MLX90614环境温度
-// [16-23]: AHT20温度
-// [24-31]: AHT20湿度
+## WiFi 遥测
+
+遥测 JSON 中包含 AI 字段：
+```json
+{"type":"telemetry","MLX_obj":36.5,"ai_score":87,"ai_ready":1}
 ```
 
-## 应用场景
+Alert JSON 同样包含：
+```json
+{"type":"alert","state":"temp_warning","ai_score":45,"ai_ready":1}
+```
 
-### 1. 电机异常检测
-- 监测电机电流波形
-- 检测轴承磨损、堵转等异常
+## OLED 显示
 
-### 2. 电池健康监测
-- 监测电压、电流曲线
-- 检测电池老化、过放等异常
-
-### 3. 环境异常检测
-- 温度异常波动
-- 气体泄漏检测
-
-### 4. 运动状态监测
-- 加速度异常
-- 碰撞检测
+页面 1 第 3 行显示 AI 状态：
+- `AI:87` — 相似度分数
+- `AI:--` — 未就绪或检测失败
 
 ## API 参考
 
@@ -144,19 +137,13 @@ buffer[1] = sensor_sample_1;
 ```c
 bool AI_AnomalyDetect_Init(void);
 ```
-初始化AI模块，使用预训练模型。
-
-### AI_AnomalyDetect_Learn()
-```c
-AI_LearnStatus_t AI_AnomalyDetect_Learn(const float *data);
-```
-学习正常模式，输入32个float数据。
+初始化 AI 模块。预训练模式下立即就绪。
 
 ### AI_AnomalyDetect_Check()
 ```c
 AI_DetectResult_t AI_AnomalyDetect_Check(const float *data, uint8_t *similarity_out);
 ```
-检测异常，返回相似度百分比。
+检测异常，输入 32 个 float，输出相似度百分比。
 
 ### AI_AnomalyDetect_IsAnomaly()
 ```c
@@ -164,36 +151,21 @@ bool AI_AnomalyDetect_IsAnomaly(uint8_t similarity, uint8_t threshold);
 ```
 判断是否为异常，低于阈值认为异常。
 
-### AI_AnomalyDetect_IsReady()
+### AI_StatusSet() / AI_StatusGet()
 ```c
-bool AI_AnomalyDetect_IsReady(void);
+void AI_StatusSet(uint8_t ready, uint8_t similarity, uint8_t score_valid, uint32_t learn_count);
+AIStatus_t AI_StatusGet(void);
 ```
-检查是否已完成学习并就绪。
+跨任务安全的 AI 状态读写（通过 volatile 变量）。
 
 ## 注意事项
 
-1. **学习数据质量**: 学习阶段必须使用正常状态的数据，异常数据会影响检测精度
-2. **数据预处理**: 建议对传感器数据进行归一化处理
-3. **阈值选择**: 根据应用场景调整异常阈值 (建议80-90)
-4. **实时性**: 检测函数执行时间很短，适合实时应用
-5. **内存占用**: 库本身占用RAM约224字节，注意总内存预算
-
-## 故障排除
-
-### 初始化失败
-- 检查库文件是否正确链接
-- 确认MCU型号匹配 (STM32F4系列)
-
-### 检测不准确
-- 增加学习样本数量
-- 检查学习数据是否为正常状态
-- 调整异常阈值
-
-### 内存不足
-- 优化其他模块的内存占用
-- 考虑使用外部存储
+1. **模型是预训练的**：`libneai.a` 中已嵌入 NanoEdge AI Studio 生成的模型，无需上电后学习
+2. **数据格式**：必须是 32 个连续的同类型传感器采样，不能混合不同传感器
+3. **I2C 互斥**：AITask 和 SensorTask 共享 I2C 总线，通过 `I2CMutexHandle` 互斥锁保护
+4. **阈值调整**：根据实际场景调整 `AI_SCORE_*` 宏定义
 
 ## 参考资料
 
 - NanoEdge AI Studio: https://www.st.com/en/development-tools/nanoedgeaistudio.html
-- STM32F407参考手册: https://www.st.com/resource/reference_manual/rm0090-stm32f405415-stm32f407417-stm32f427437-and-stm32f429439-advanced-armbased-32bit-mcus-stmicroelectronics.pdf
+- MLX90614 数据手册: https://www.melexis.com/en/product/MLX90614/Digital-Plug-Play-Infrared-Thermometer-TO-Can
