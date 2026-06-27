@@ -34,4 +34,10 @@ uint8_t ObstacleCtrl_IsDone(void);
  */
 MotorCmd_t ObstacleCtrl_Run(SensorData_t *data);
 
+/**
+ * @brief 获取当前避障状态名称(调试用)
+ * @return 状态名称字符串
+ */
+const char* ObstacleCtrl_GetStateName(void);
+
 #endif

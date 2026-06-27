@@ -128,6 +128,28 @@ uint8_t ObstacleCtrl_IsDone(void)
 }
 
 /**
+ * @brief 获取当前避障状态名称(调试用)
+ * @return 状态名称字符串
+ */
+const char* ObstacleCtrl_GetStateName(void)
+{
+    switch (obs_state) {
+    case OBS_IDLE:              return "IDLE";
+    case OBS_BRAKE:             return "BRK";
+    case OBS_SCAN_LEFT_TURN:    return "SLT";
+    case OBS_SCAN_LEFT_SAMPLE:  return "SLS";
+    case OBS_SCAN_LEFT_RETURN:  return "SLR";
+    case OBS_SCAN_RIGHT_TURN:   return "SRT";
+    case OBS_SCAN_RIGHT_SAMPLE: return "SRS";
+    case OBS_SCAN_RIGHT_RETURN: return "SRR";
+    case OBS_TURN_CHOICE:       return "TCH";
+    case OBS_ADVANCE:           return "ADV";
+    case OBS_FIND_LINE:         return "FND";
+    default:                    return "???";
+    }
+}
+
+/**
  * @brief 执行障碍物避障控制
  * @param data 传感器数据
  * @return 电机控制命令

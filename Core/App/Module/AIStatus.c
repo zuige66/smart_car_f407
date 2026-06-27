@@ -1,4 +1,4 @@
-﻿#include "AIStatus.h"
+#include "AIStatus.h"
 
 static volatile uint8_t g_ai_ready = 0U;
 static volatile uint8_t g_ai_similarity = 0U;

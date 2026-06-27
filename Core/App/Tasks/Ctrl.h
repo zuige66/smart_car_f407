@@ -66,9 +66,9 @@ typedef struct {
 } SensorData_t;
 
 /* 温度阈值定义 */
-#define THERMAL_ALERT_THRESHOLD     29.0f   /* 温度预警阈值 */
-#define THERMAL_WARNING_THRESHOLD   30.0f   /* 温度报警阈值 */
-#define THERMAL_EMERGENCY_THRESHOLD 31.0f   /* 紧急撤离温度阈值 */
+#define THERMAL_ALERT_THRESHOLD     30.0f   /* 温度预警阈值 */
+#define THERMAL_WARNING_THRESHOLD   45.0f   /* 温度报警阈值 */
+#define THERMAL_EMERGENCY_THRESHOLD 60.0f   /* 紧急撤离温度阈值 */
 #define OBS_DETECT_DIST             30.0f   /* 障碍物检测距离(cm) */
 #define BATTERY_LOW_THRESHOLD       20U     /* 低电量阈值(%) */
 #define WIFI_REPORT_INTERVAL_MS     3000U   /* WiFi上报间隔(ms) */

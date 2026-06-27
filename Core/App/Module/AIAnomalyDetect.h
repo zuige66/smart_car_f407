@@ -1,4 +1,4 @@
-﻿#ifndef AI_ANOMALY_DETECT_H
+#ifndef AI_ANOMALY_DETECT_H
 #define AI_ANOMALY_DETECT_H
 
 #include <stdbool.h>

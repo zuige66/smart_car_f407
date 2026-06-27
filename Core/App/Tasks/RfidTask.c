@@ -322,6 +322,9 @@ static RfidStatus_t Rfid_ToCard(uint8_t command,
         if ((irq & 0x01U) != 0U) {
             break;
         }
+        /* RC522 射频通信需要时间(WUPA ~0.5ms, Anticollision ~1-5ms),
+           每次轮询间需留出足够等待时间,否则轮询窗口(~600µs)太短 */
+        osDelay(1U);
     }
 
     Rfid_ClearBitMask(RFID_REG_BIT_FRAMING, 0x80U);

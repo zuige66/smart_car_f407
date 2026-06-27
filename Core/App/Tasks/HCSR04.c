@@ -14,7 +14,7 @@
 #include "tim.h"
 #include "WifiComm.h"
 
-#define HCSR04_VERBOSE_LOG 0
+#define HCSR04_VERBOSE_LOG 1
 
 #define HCSR04_SAMPLES 5U
 #define HCSR04_VALID_MIN_US 117U

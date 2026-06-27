@@ -222,7 +222,7 @@ void MX_FREERTOS_Init(void) {
   DriverPWMHandle = osMessageQueueNew (16, sizeof(uint32_t), &DriverPWM_attributes);
 
   /* creation of MotorAction */
-  MotorActionHandle = osMessageQueueNew (16, 12, &MotorAction_attributes);
+  MotorActionHandle = osMessageQueueNew (16, sizeof(MotorCmd_t), &MotorAction_attributes);
 
   /* USER CODE BEGIN RTOS_QUEUES */
   if (MotorActionHandle == NULL) {

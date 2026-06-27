@@ -167,6 +167,33 @@ void StartDriverTask(void *argument)
             timeout_count++;
         }
 
+        {
+            static uint32_t last_drv_dbg = 0U;
+            uint32_t now_drv = osKernelGetTickCount();
+            if ((now_drv - last_drv_dbg) >= 1000U) {
+                last_drv_dbg = now_drv;
+                const char *cmd_name = "STOP";
+                if (motor_cmd.cmd == MOTOR_CMD_FORWARD) cmd_name = "FWD";
+                else if (motor_cmd.cmd == MOTOR_CMD_TURN_LEFT) cmd_name = "TL";
+                else if (motor_cmd.cmd == MOTOR_CMD_TURN_RIGHT) cmd_name = "TR";
+                else if (motor_cmd.cmd == MOTOR_CMD_SPIN_LEFT) cmd_name = "SL";
+                else if (motor_cmd.cmd == MOTOR_CMD_SPIN_RIGHT) cmd_name = "SR";
+                char buf[128];
+                (void)snprintf(buf, sizeof(buf),
+                               "[D] cmd=%s p=%u pl=%u pr=%u T4=%lu/%lu T3=%lu/%lu to=%lu\r\n",
+                               cmd_name,
+                               (unsigned)motor_cmd.pwm,
+                               (unsigned)motor_cmd.pwm_left,
+                               (unsigned)motor_cmd.pwm_right,
+                               (unsigned long)__HAL_TIM_GET_COMPARE(&htim4, TIM_CHANNEL_2),
+                               (unsigned long)__HAL_TIM_GET_COMPARE(&htim4, TIM_CHANNEL_3),
+                               (unsigned long)__HAL_TIM_GET_COMPARE(&htim3, TIM_CHANNEL_1),
+                               (unsigned long)__HAL_TIM_GET_COMPARE(&htim3, TIM_CHANNEL_2),
+                               (unsigned long)timeout_count);
+                (void)HAL_UART_Transmit(&BOARD_DEBUG_UART, (uint8_t *)buf, (uint16_t)strlen(buf), 100U);
+            }
+        }
+
 #if DRIVERTASK_VERBOSE_LOG
         if ((osKernelGetTickCount() - last_debug_tick) >= 1000U) {
             last_debug_tick = osKernelGetTickCount();

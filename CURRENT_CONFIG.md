@@ -611,9 +611,9 @@ obs_bypass_dir = (左距离 >= 右距离) ? -1 (向左绕) : 1 (向右绕)
 
 | 阈值宏 | 值 | 对应状态 | 行为 |
 |---|---|---|---|
-| `THERMAL_ALERT_THRESHOLD` | ≥ 29.0°C | STATE_THERMAL_ALERT | 继续巡逻，蜂鸣器关 |
-| `THERMAL_WARNING_THRESHOLD` | ≥ 30.0°C | STATE_THERMAL_WARNING | 速度 50%，蜂鸣器开 |
-| `THERMAL_EMERGENCY_THRESHOLD` | ≥ 31.0°C | STATE_EMERGENCY | 紧急返回，蜂鸣器 + LED |
+| `THERMAL_ALERT_THRESHOLD` | ≥ 30.0°C | STATE_THERMAL_ALERT | 继续巡逻，蜂鸣器关 |
+| `THERMAL_WARNING_THRESHOLD` | ≥ 45.0°C | STATE_THERMAL_WARNING | 速度 50%，蜂鸣器开 |
+| `THERMAL_EMERGENCY_THRESHOLD` | ≥ 60.0°C | STATE_EMERGENCY | 紧急返回，蜂鸣器 + LED |
 
 ### 11.2 各状态控制行为
 
@@ -986,9 +986,9 @@ typedef enum {
 |---|---|---|---|---|
 | `STATE_STANDBY` | 0 | `"idle"` | `IDLE` | 未启动/手动停止 |
 | `STATE_PATROL` | 1 | `"start_patrol"` | `PATROL` | 正常巡逻 |
-| `STATE_THERMAL_ALERT` | 2 | `"temp_warning"` | `T_WARN` | 温度 ≥ 29°C |
-| `STATE_THERMAL_WARNING` | 3 | `"temp_alarm"` | `T_ALARM` | 温度 ≥ 30°C |
-| `STATE_EMERGENCY` | 4 | `"evacuate"` | `EVACUATE` | 温度 ≥ 31°C |
+| `STATE_THERMAL_ALERT` | 2 | `"temp_warning"` | `T_WARN` | 温度 ≥ 30°C |
+| `STATE_THERMAL_WARNING` | 3 | `"temp_alarm"` | `T_ALARM` | 温度 ≥ 45°C |
+| `STATE_EMERGENCY` | 4 | `"evacuate"` | `EVACUATE` | 温度 ≥ 60°C |
 | `STATE_LOW_BATTERY` | 5 | `"return_home"` | `RET_HOME` | 终点 RFID 触发 |
 
 ### 14.3 状态判定优先级 (Ctrl_DetermineState)
@@ -1015,15 +1015,15 @@ AI 分数阈值定义（`AIAnomalyDetect.h`）：
 从任意温度状态回退到 `STATE_PATROL` 时，强制保持原状态 5 秒：
 
 ```
-温度升至 31°C → STATE_EMERGENCY      (立即)
-温度降至 28°C → STATE_EMERGENCY      (开始 5s 计时)
+温度升至 60°C → STATE_EMERGENCY      (立即)
+温度降至 29°C → STATE_EMERGENCY      (开始 5s 计时)
               → STATE_EMERGENCY      (第 3 秒)
               → STATE_PATROL         (5 秒后)
 
 温度升降跨越预警/报警时无延迟：
-  29°C → STATE_THERMAL_ALERT    (立即)
-  30°C → STATE_THERMAL_WARNING  (立即)
-  28°C → STATE_THERMAL_ALERT    (立即降级，无延迟)
+  30°C → STATE_THERMAL_ALERT    (立即)
+  45°C → STATE_THERMAL_WARNING  (立即)
+  29°C → STATE_THERMAL_ALERT    (立即降级，无延迟)
   24°C → start 5s 计时          (5s 后回 PATROL)
 ```
 
@@ -1053,12 +1053,12 @@ AI 分数阈值定义（`AIAnomalyDetect.h`）：
                │                    │        │    │    │
                │              ┌─────▼──┐ ┌──▼────┐│    │
                │              │T_WARN  │ │T_ALARM││    │
-               │              │(≥29°C) │ │(≥30°C)││    │
+               │              │(≥30°C) │ │(≥45°C)││    │
                │              └────┬───┘ └──┬────┘│    │
                │                   │        │     │    │
                │              ┌────▼────────▼──┐  │    │
                │              │   EVACUATE     │  │    │
-               │              │   (≥31°C)      │  │    │
+               │              │   (≥60°C)      │  │    │
                │              └───────┬────────┘  │    │
                │                      │           │    │
                │              ┌───────▼────────┐  │    │

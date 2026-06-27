@@ -1,4 +1,4 @@
-﻿#ifndef AI_STATUS_H
+#ifndef AI_STATUS_H
 #define AI_STATUS_H
 
 #include <stdint.h>

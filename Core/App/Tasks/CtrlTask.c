@@ -1,6 +1,6 @@
 ﻿/**
  * @file CtrlTask.c
- * @brief 涓绘帶鍒朵换鍔″疄鐜? * @details 瀹炵幇绯荤粺鐘舵€佹満銆佷紶鎰熷櫒鏁版嵁閲囬泦銆丷FID浜嬩欢澶勭悊銆乄iFi閬ユ祴涓婃姤绛夋牳蹇冩帶鍒堕€昏緫
+ * @brief 主控任务实现 * @details 实现系统状态机、传感器数据聚合、RFID事件处理、WiFi遥测上报等核心控制逻辑
  */
 
 #include <stdarg.h>
@@ -33,31 +33,33 @@ extern volatile uint16_t g_mq8_adc_raw;
 extern volatile uint8_t g_mq8_do;
 extern osMessageQueueId_t TrackHandle;
 extern osMessageQueueId_t MotorActionHandle;
+extern volatile uint8_t g_track_status;
 extern volatile uint32_t task_run_count[];
 
-static SystemState current_state = STATE_STANDBY;    /* 褰撳墠绯荤粺鐘舵€?*/
-static uint8_t system_started = 0U;                   /* 绯荤粺鍚姩鏍囧織 */
-static uint32_t last_wifi_report = 0U;                /* 涓婃WiFi涓婃姤鏃堕棿鎴?*/
-static uint8_t manual_override_enabled = 0U;          /* 鎵嬪姩瑕嗙洊鏍囧織 */
-static SystemState manual_override_state = STATE_STANDBY; /* 鎵嬪姩瑕嗙洊鐘舵€?*/
+static SystemState current_state = STATE_STANDBY;    /* 当前系统状态*/
+static uint8_t system_started = 0U;                   /* 系统启动标志 */
+static uint32_t last_wifi_report = 0U;                /* 上次WiFi上报时间戳*/
+static uint8_t manual_override_enabled = 0U;          /* 手动覆盖标志 */
+static SystemState manual_override_state = STATE_STANDBY; /* 手动覆盖状态*/
 
-static uint8_t prev_rfid_present = 0U;                /* 涓婁竴娆FID鏍囩瀛樺湪鐘舵€?*/
-static uint8_t prev_rfid_id = 0U;                     /* 涓婁竴娆FID鏍囩ID */
-static uint8_t rfid_measure_active = 0U;              /* RFID娴嬮噺鐘舵€佹縺娲绘爣蹇?*/
-static uint32_t rfid_measure_tick = 0U;               /* RFID娴嬮噺寮€濮嬫椂闂存埑 */
-static uint32_t rfid_measure_last_print = 0U;         /* RFID娴嬮噺涓婃鎵撳嵃鏃堕棿 */
-static uint8_t rfid_return_home_active = 0U;          /* RFID杩斿洖棣栭〉鐘舵€佹縺娲绘爣蹇?*/
-static uint32_t rfid_return_home_tick = 0U;           /* RFID杩斿洖棣栭〉寮€濮嬫椂闂存埑 */
-static uint32_t thermal_exit_tick = 0U;                /* 娓╁害閫€鍑烘椂闂存埑 */
+static uint8_t prev_rfid_present = 0U;                /* 上一次RFID标签存在状态*/
+static uint8_t prev_rfid_id = 0U;                     /* 上一次RFID标签ID */
+static uint8_t rfid_measure_active = 0U;              /* RFID测量状态激活标志*/
+static uint32_t rfid_measure_tick = 0U;               /* RFID测量开始时间戳 */
+static uint32_t rfid_measure_last_print = 0U;         /* RFID测量上次打印时间 */
+static uint8_t rfid_return_home_active = 0U;          /* RFID返回首页状态激活标志*/
+static uint32_t rfid_return_home_tick = 0U;           /* RFID返回首页开始时间戳 */
+static uint8_t rfid_return_home_done = 0U;            /* RFID返回完成标志 */
+static uint32_t thermal_exit_tick = 0U;                /* 温度退出时间戳 */
 
-volatile uint8_t g_obs_state = 0U;                    /* 褰撳墠绯荤粺鐘舵€侊紙渚汷LED鏄剧ず锛?*/
+volatile uint8_t g_obs_state = 0U;                    /* 当前系统状态（用于LED显示）*/
 
 #if CTRLTASK_VERBOSE_LOG
 static uint32_t last_heartbeat_tick = 0U;
 
 /**
- * @brief 鍙戦€佽皟璇曟枃鏈埌涓插彛
- * @param text 璋冭瘯鏂囨湰
+ * @brief 发送调试文本到串口
+ * @param text 调试文本
  */
 static void Ctrl_DebugText(const char *text)
 {
@@ -69,8 +71,8 @@ static void Ctrl_DebugText(const char *text)
 }
 
 /**
- * @brief 鎵撳嵃蹇冭烦璋冭瘯淇℃伅
- * @details 杈撳嚭鍚勪换鍔¤繍琛岃鏁般€乄iFi涓㈠寘鏁板拰璺濈淇℃伅
+ * @brief 打印心跳调试信息
+ * @details 输出各任务运行计数、WiFi丢包数和距离信息
  */
 static void Ctrl_DebugHeartbeat(void)
 {
@@ -95,29 +97,29 @@ static void Ctrl_DebugHeartbeat(void)
 #endif
 
 /**
- * @brief 鑾峰彇褰撳墠绯荤粺鐘舵€? * @return 褰撳墠绯荤粺鐘舵€? */
+ * @brief 获取当前系统状态 * @return 当前系统状态 */
 SystemState Ctrl_GetState(void)
 {
     return current_state;
 }
 
 /**
- * @brief 璁剧疆绯荤粺鐘舵€? * @param state 瑕佽缃殑绯荤粺鐘舵€? */
+ * @brief 设置系统状态 * @param state 要设置的系统状态 */
 void Ctrl_SetState(SystemState state)
 {
     current_state = state;
 }
 
 /**
- * @brief 妫€鏌ョ郴缁熸槸鍚﹀凡鍚姩
- * @return 1-宸插惎鍔紝0-鏈惎鍔? */
+ * @brief 检查系统是否已启动
+ * @return 1-已启动，0-未启动 */
 uint8_t Ctrl_IsStarted(void)
 {
     return system_started;
 }
 
 /**
- * @brief 鍚姩绯荤粺宸￠€? * @details 灏嗙郴缁熺姸鎬佽缃负宸￠€荤姸鎬侊紝娓呴櫎鎵嬪姩瑕嗙洊鏍囧織
+ * @brief 启动系统巡逻 * @details 灏嗙郴缁熺姸鎬佽缃负宸￠€荤姸鎬侊紝娓呴櫎手动覆盖标志
  */
 void Ctrl_Start(void)
 {
@@ -130,8 +132,8 @@ void Ctrl_Start(void)
 }
 
 /**
- * @brief 鍋滄绯荤粺
- * @details 灏嗙郴缁熺姸鎬佽缃负寰呮満鐘舵€侊紝鍚敤鎵嬪姩瑕嗙洊
+ * @brief 停止系统
+ * @details 将系统状态设置为待机状态，启用手动覆盖
  */
 void Ctrl_Stop(void)
 {
@@ -142,35 +144,42 @@ void Ctrl_Stop(void)
 }
 
 /**
- * @brief 璇锋眰绱ф€ユ挙绂? * @details 璁剧疆绱ф€ユ挙绂荤姸鎬侊紝鍒濆鍖栫浉鍏虫帶鍒舵ā鍧? */
+ * @brief 请求紧急撤离 * @details 设置紧急撤离状态，初始化相关控制模块 */
 void Ctrl_RequestEmergency(void)
 {
     system_started = 1U;
     manual_override_enabled = 1U;
-    manual_override_state = STATE_EMERGENCY;
-    current_state = STATE_EMERGENCY;
+   manual_override_state = STATE_EMERGENCY;
+    current_state = STATE_EMERGENCY; 
     ThermalCtrl_Init();
     ObstacleCtrl_Reset();
 }
 
 /**
- * @brief 娓呴櫎鎵嬪姩瑕嗙洊鐘舵€? */
+ * @brief 娓呴櫎手动覆盖状态 */
 void Ctrl_ClearManualOverride(void)
 {
     manual_override_enabled = 0U;
 }
 
 /**
- * @brief 璇诲彇鎵€鏈変紶鎰熷櫒鏁版嵁
- * @return 鍖呭惈鎵€鏈変紶鎰熷櫒鏁版嵁鐨勭粨鏋勪綋
+ * @brief 读取所有传感器数据
+ * @return 包含所有传感器数据的结构体
  */
 static SensorData_t Ctrl_ReadAllSensors(void)
 {
     SensorData_t data = {0};
 
     data.distance = g_distance;
-    (void)osMessageQueueGet(TrackHandle, &data.track, NULL, 0U);
-    data.track &= 0x0FU;
+    {
+        osStatus_t qs = osMessageQueueGet(TrackHandle, &data.track, NULL, 0U);
+        if (qs != osOK) {
+            /* Queue empty: use global as fallback */
+            data.track = g_track_status & 0x0FU;
+        } else {
+            data.track &= 0x0FU;
+        }
+    }
     data.temperature = g_aht20_temp;
     data.ambient_temp = g_mlx90614_ambient;
     data.object_temp = g_mlx90614_object;
@@ -188,45 +197,34 @@ static SensorData_t Ctrl_ReadAllSensors(void)
 }
 
 /**
- * @brief 鏍规嵁浼犳劅鍣ㄦ暟鎹‘瀹氱郴缁熺姸鎬? * @param data 浼犳劅鍣ㄦ暟鎹? * @return 璁＄畻鍚庣殑绯荤粺鐘舵€? */
-static SystemState Ctrl_DetermineState(const SensorData_t *data)
+ * @brief 重置温度防抖计时器
+ */
+static void Ctrl_ResetThermalTick(void)
 {
-    SystemState ai_req;
-    AIStatus_t ai_status = AI_StatusGet();
+    thermal_exit_tick = 0U;
+}
 
-    if (rfid_return_home_active) {
-        thermal_exit_tick = 0U;
-        return STATE_LOW_BATTERY;
-    }
-    if (manual_override_enabled) {
-        thermal_exit_tick = 0U;
-        return manual_override_state;
-    }
-    if (!system_started) {
-        thermal_exit_tick = 0U;
-        return STATE_STANDBY;
-    }
-    if (!ai_status.ready || !ai_status.score_valid) {
-        thermal_exit_tick = 0U;
-        return STATE_PATROL;
-    }
-    if (!AI_AnomalyDetect_GetUsePretrained()) {
-        thermal_exit_tick = 0U;
-        return STATE_PATROL;
-    }
+/**
+ * @brief 根据AI相似度确定请求状态
+ * @param similarity AI相似度(0-100)
+ * @return 对应的系统状态
+ */
+static SystemState Ctrl_AiScoreToState(uint8_t similarity)
+{
+    if (similarity >= AI_SCORE_NORMAL_MIN)  return STATE_PATROL;
+    if (similarity >= AI_SCORE_WARNING_MIN) return STATE_THERMAL_ALERT;
+    if (similarity >= AI_SCORE_ALARM_MIN)   return STATE_THERMAL_WARNING;
+    return STATE_EMERGENCY;
+}
 
-    if (ai_status.similarity >= AI_SCORE_NORMAL_MIN) {
-        ai_req = STATE_PATROL;
-    } else if (ai_status.similarity >= AI_SCORE_WARNING_MIN) {
-        ai_req = STATE_THERMAL_ALERT;
-    } else if (ai_status.similarity >= AI_SCORE_ALARM_MIN) {
-        ai_req = STATE_THERMAL_WARNING;
-    } else {
-        ai_req = STATE_EMERGENCY;
-    }
-
-    (void)data;
-
+/**
+ * @brief 温度状态防抖：从高级别退回PATROL时延迟5秒确认
+ * @param ai_req AI请求的目标状态
+ * @return 防抖后的最终状态
+ */
+static SystemState Ctrl_ThermalDebounce(SystemState ai_req)
+{
+    /* 从警报/报警退回PATROL时，保持5秒 */
     if (current_state >= STATE_THERMAL_ALERT && ai_req == STATE_PATROL) {
         if (thermal_exit_tick == 0U) {
             thermal_exit_tick = osKernelGetTickCount();
@@ -234,22 +232,64 @@ static SystemState Ctrl_DetermineState(const SensorData_t *data)
         if ((osKernelGetTickCount() - thermal_exit_tick) < 5000U) {
             return current_state;
         }
-        thermal_exit_tick = 0U;
-        return STATE_PATROL;
     }
 
-    if (ai_req >= STATE_THERMAL_ALERT) {
-        thermal_exit_tick = 0U;
-        return ai_req;
-    }
-
-    thermal_exit_tick = 0U;
-    return STATE_PATROL;
+    Ctrl_ResetThermalTick();
+    return ai_req;
 }
 
 /**
- * @brief 澶勭悊WiFi閬ユ祴涓婃姤
- * @param data 浼犳劅鍣ㄦ暟鎹? */
+ * @brief 根据传感器数据确定系统状态
+ * @param data 传感器数据
+ * @return 计算后的系统状态
+ *
+ * 优先级从高到低：
+ *   1. RFID特殊动作（终点返回、返回完成）
+ *   2. 手动覆盖
+ *   3. 系统未启动
+ *   4. AI未就绪 → 默认巡逻
+ *   5. AI分数判定 + 温度防抖
+ */
+static SystemState Ctrl_DetermineState(const SensorData_t *data)
+{
+    AIStatus_t ai_status = AI_StatusGet();
+    SystemState ai_req;
+
+    (void)data;
+
+    /* 高优先级覆盖：直接返回，不走AI判定 */
+    if (rfid_return_home_active) {
+        Ctrl_ResetThermalTick();
+        return STATE_LOW_BATTERY;
+    }
+    if (rfid_return_home_done) {
+        Ctrl_ResetThermalTick();
+        return STATE_STANDBY;
+    }
+    if (manual_override_enabled) {
+        Ctrl_ResetThermalTick();
+        return manual_override_state;
+    }
+    if (!system_started) {
+        Ctrl_ResetThermalTick();
+        return STATE_STANDBY;
+    }
+
+    /* AI未就绪或未使用预训练模型 → 默认巡逻 */
+    if (!ai_status.ready || !ai_status.score_valid ||
+        !AI_AnomalyDetect_GetUsePretrained()) {
+        Ctrl_ResetThermalTick();
+        return STATE_PATROL;
+    }
+
+    /* AI就绪：根据分数确定状态，带温度防抖 */
+    ai_req = Ctrl_AiScoreToState(ai_status.similarity);
+    return Ctrl_ThermalDebounce(ai_req);
+}
+
+/**
+ * @brief 处理WiFi遥测上报
+ * @param data 传感器数据 */
 static void Ctrl_HandleWifiReport(SensorData_t *data)
 {
     uint32_t now = osKernelGetTickCount();
@@ -261,9 +301,9 @@ static void Ctrl_HandleWifiReport(SensorData_t *data)
 }
 
 /**
- * @brief 鏍煎紡鍖栨墦鍗板埌涓插彛
- * @param fmt 鏍煎紡鍖栧瓧绗︿覆
- * @param ... 鍙彉鍙傛暟
+ * @brief 格式化打印到串口
+ * @param fmt 格式化字符串
+ * @param ... 可变参数
  */
 static void Ctrl_Printf(const char *fmt, ...)
 {
@@ -278,8 +318,8 @@ static void Ctrl_Printf(const char *fmt, ...)
 }
 
 /**
- * @brief 澶勭悊RFID浜嬩欢
- * @param data 浼犳劅鍣ㄦ暟鎹? */
+ * @brief 处理RFID事件
+ * @param data 传感器数据 */
 static void Ctrl_HandleRfidEvent(const SensorData_t *data)
 {
     uint8_t now_present = Rfid_IsTagPresent();
@@ -295,6 +335,7 @@ static void Ctrl_HandleRfidEvent(const SensorData_t *data)
             Ctrl_Printf("[CTRL] -> START patrolling\r\n");
         } else if (strcmp(loc, "end_stop") == 0) {
             rfid_return_home_active = 1U;
+            rfid_return_home_done = 0U;
             rfid_return_home_tick = osKernelGetTickCount();
             Ctrl_Printf("[CTRL] -> RETURN HOME spin 180\r\n");
         } else if (strncmp(loc, "place_", 6) == 0) {
@@ -310,7 +351,7 @@ static void Ctrl_HandleRfidEvent(const SensorData_t *data)
 }
 
 /**
- * @brief 鏍规嵁绯荤粺鐘舵€佸鐞嗘姤璀? * @param state 褰撳墠绯荤粺鐘舵€? */
+ * @brief 根据系统状态处理报警 * @param state 当前系统状态 */
 static void Ctrl_HandleAlarm(SystemState state)
 {
     switch (state) {
@@ -331,7 +372,7 @@ static void Ctrl_HandleAlarm(SystemState state)
 }
 
 /**
- * @brief 涓绘帶鍒朵换鍔″叆鍙ｅ嚱鏁? * @param argument 浠诲姟鍙傛暟锛堟湭浣跨敤锛? */
+ * @brief 主控任务入口函数 * @param argument 任务参数（未使用） */
 void StartCtrlTask(void *argument)
 {
     (void)argument;
@@ -428,17 +469,48 @@ void StartCtrlTask(void *argument)
             uint32_t elapsed = osKernelGetTickCount() - rfid_return_home_tick;
 
             cmd.cmd = MOTOR_CMD_SPIN_RIGHT;
-            cmd.pwm = 0U;
-            cmd.pwm_left = 1400U;
-            cmd.pwm_right = 1400U;
+            cmd.pwm = 600U;
             if (elapsed >= 1500U) {
                 rfid_return_home_active = 0U;
-                Ctrl_Printf("[CTRL] Return home done, resume patrol\r\n");
+                rfid_return_home_done = 1U;
+                current_state = STATE_STANDBY;
+                cmd.cmd = MOTOR_CMD_STOP;
+                Ctrl_Printf("[CTRL] Return home done, stopping\r\n");
             }
         }
 
         Ctrl_HandleAlarm(current_state);
         Ctrl_HandleWifiReport(&data);
+
+        {
+            static uint32_t last_motor_dbg = 0U;
+            uint32_t now_dbg = osKernelGetTickCount();
+            if ((now_dbg - last_motor_dbg) >= 1000U) {
+                const char *cmd_name = "STOP";
+                uint16_t pwm_l = cmd.pwm_left;
+                uint16_t pwm_r = cmd.pwm_right;
+                if (cmd.cmd == MOTOR_CMD_FORWARD) { cmd_name = "FWD"; }
+                else if (cmd.cmd == MOTOR_CMD_TURN_LEFT) { cmd_name = "TL"; }
+                else if (cmd.cmd == MOTOR_CMD_TURN_RIGHT) { cmd_name = "TR"; }
+                else if (cmd.cmd == MOTOR_CMD_SPIN_LEFT) { cmd_name = "SL"; pwm_l = cmd.pwm; pwm_r = cmd.pwm; }
+                else if (cmd.cmd == MOTOR_CMD_SPIN_RIGHT) { cmd_name = "SR"; pwm_l = cmd.pwm; pwm_r = cmd.pwm; }
+                last_motor_dbg = now_dbg;
+                Ctrl_Printf("[D] trk=%02X glb=%02X tmod=%s cmd=%s L=%u R=%u obs=%s done=%u dist=%d.%1d st=%u q=%lu\r\n",
+                            (unsigned)(data.track & 0x0FU),
+                            (unsigned)(g_track_status & 0x0FU),
+                            TrackCtrl_GetModeName(),
+                            cmd_name,
+                            (unsigned)pwm_l,
+                            (unsigned)pwm_r,
+                            ObstacleCtrl_GetStateName(),
+                            (unsigned)ObstacleCtrl_IsDone(),
+                            (int)(data.distance * 10.0f + 0.5f) / 10,
+                            (int)(data.distance * 10.0f + 0.5f) % 10,
+                            (unsigned)current_state,
+                            (unsigned long)osMessageQueueGetCount(TrackHandle));
+            }
+        }
+
         (void)osMessageQueuePut(MotorActionHandle, &cmd, 0U, 5U);
 
 #if CTRLTASK_VERBOSE_LOG

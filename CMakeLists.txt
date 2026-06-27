@@ -81,6 +81,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/App/Module/WifiComm.c
     Core/App/Module/AIStatus.c
     Core/App/Module/AIAnomalyDetect.c
+    Core/App/Module/VoltageDetect.c
 )
 
 # Add include paths

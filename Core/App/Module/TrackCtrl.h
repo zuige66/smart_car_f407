@@ -48,4 +48,10 @@ uint8_t TrackCtrl_IsCenteredLine(uint8_t track_data);
  */
 int8_t TrackCtrl_GetLastDirection(void);
 
+/**
+ * @brief 获取当前循迹模式名称(调试用)
+ * @return 模式名称字符串
+ */
+const char* TrackCtrl_GetModeName(void);
+
 #endif

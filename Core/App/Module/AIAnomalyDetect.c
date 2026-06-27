@@ -1,4 +1,4 @@
-﻿#include "AIAnomalyDetect.h"
+#include "AIAnomalyDetect.h"
 #include "NanoEdgeAI.h"
 
 #include <string.h>
