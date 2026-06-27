@@ -130,9 +130,10 @@ MotorCmd_t ThermalCtrl_Emergency(SensorData_t *data)
         break;
 
     case RETURN_SPIN_180:
-        /* 执行180度右转 */
         cmd.cmd = MOTOR_CMD_SPIN_RIGHT;
         cmd.pwm = 700U;
+        cmd.pwm_left = 700U;
+        cmd.pwm_right = 700U;
         if (++return_counter >= RETURN_SPIN_CYCLES) {
             return_state = RETURN_FIND_LINE;
             return_counter = 0U;
@@ -149,6 +150,8 @@ MotorCmd_t ThermalCtrl_Emergency(SensorData_t *data)
         }
         cmd.cmd = MOTOR_CMD_SPIN_RIGHT;
         cmd.pwm = RETURN_FIND_LINE_PWM;
+        cmd.pwm_left = RETURN_FIND_LINE_PWM;
+        cmd.pwm_right = RETURN_FIND_LINE_PWM;
         /* 超时处理 */
         if (++return_counter >= RETURN_FIND_LINE_TIMEOUT) {
             return_state = RETURN_DONE;

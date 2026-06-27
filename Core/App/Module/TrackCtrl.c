@@ -259,6 +259,8 @@ static MotorCmd_t TrackCtrl_MakeSearch(int8_t direction)
 
     cmd.cmd = (direction < 0) ? MOTOR_CMD_SPIN_LEFT : MOTOR_CMD_SPIN_RIGHT;
     cmd.pwm = TRACK_SEARCH_SPEED;
+    cmd.pwm_left = TRACK_SEARCH_SPEED;
+    cmd.pwm_right = TRACK_SEARCH_SPEED;
     return cmd;
 }
 

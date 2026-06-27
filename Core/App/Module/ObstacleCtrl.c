@@ -71,6 +71,8 @@ static MotorCmd_t Obstacle_MakeSpin(int8_t direction, uint16_t pwm)
 
     cmd.cmd = (direction < 0) ? MOTOR_CMD_SPIN_LEFT : MOTOR_CMD_SPIN_RIGHT;
     cmd.pwm = pwm;
+    cmd.pwm_left = pwm;
+    cmd.pwm_right = pwm;
     return cmd;
 }
 

@@ -1,6 +1,10 @@
 /**
  * @file SensorTask.c
- * @brief 传感器数据采集任务实现 * @details 采集循迹传感器、温度传感器(AHT20/MLX90614)、MQ-8气体传感器数据 */
+ * @brief 传感器数据采集任务实现
+ * @details 采集循迹传感器、温度传感器(AHT20/MLX90614)、MQ-8气体传感器数据，
+ *          通过全局变量和消息队列将数据提供给其他任务(CtrlTask、AITask)。
+ *          任务周期80ms，温湿度传感器每2秒更新一次。
+ */
 
 #include <string.h>
 #include <stdio.h>
@@ -8,32 +12,35 @@
 
 #include "cmsis_os2.h"
 
-#include "Aht20.h"
-#include "adc.h"
-#include "board_compat.h"
-#include "WifiComm.h"
-#include "VoltageDetect.h"
+#include "Aht20.h"              /* AHT20温湿度传感器驱动 */
+#include "adc.h"                /* ADC驱动(MQ-8气体传感器) */
+#include "board_compat.h"       /* 板级硬件抽象(MQ-8 DO引脚) */
+#include "WifiComm.h"           /* WiFi通信(调试日志判断) */
+#include "VoltageDetect.h"      /* 电压检测(电池电量) */
 
-#define SENSORTASK_VERBOSE_LOG 1
-#define SENSORTASK_DIAG_LOG 1
+#define SENSORTASK_VERBOSE_LOG 1  /* 是否启用循迹传感器详细日志(0=关闭,1=开启) */
+#define SENSORTASK_DIAG_LOG 1     /* 是否启用传感器诊断日志(0=关闭,1=开启) */
 
-extern osMessageQueueId_t TrackHandle;
-extern osMutexId_t I2CMutexHandle;
-extern volatile uint32_t task_run_count[];
+extern osMessageQueueId_t TrackHandle;   /* 循迹传感器消息队列(传给TrackCtrl) */
+extern osMutexId_t I2CMutexHandle;       /* I2C互斥锁(和AITask共享) */
+extern volatile uint32_t task_run_count[]; /* 任务运行计数(心跳监控) */
 
-#define MLX90614_ADDR (0x5AU << 1)
-#define MLX90614_REG_TA 0x06U
-#define MLX90614_REG_TOBJ1 0x07U
+/* MLX90614红外测温传感器参数 */
+#define MLX90614_ADDR (0x5AU << 1)   /* I2C地址(左移1位适配HAL 8位格式) */
+#define MLX90614_REG_TA 0x06U        /* 环境温度寄存器 */
+#define MLX90614_REG_TOBJ1 0x07U     /* 物体温度寄存器 */
 
-volatile float g_mlx90614_ambient = 25.0f;   /* MLX90614环境温度 */
-volatile float g_mlx90614_object = 36.5f;    /* MLX90614物体温度 */
-volatile float g_aht20_temp = 25.0f;          /* AHT20温度 */
-volatile float g_aht20_humidity = 50.0f;      /* AHT20湿度 */
-volatile uint16_t g_mq8_adc_raw = 0U;         /* MQ-8 ADC原始值*/
-volatile uint8_t g_mq8_do = 0U;               /* MQ-8数字输出 */
-volatile uint8_t g_track_status = 0U;         /* 循迹传感器状态*/
-static uint32_t g_aht20_fail_count = 0U;
+/* 全局变量：传感器数据，其他任务通过这些变量读取数据 */
+volatile float g_mlx90614_ambient = 25.0f;   /* MLX90614环境温度(°C) */
+volatile float g_mlx90614_object = 36.5f;    /* MLX90614物体温度(°C) */
+volatile float g_aht20_temp = 25.0f;          /* AHT20温度(°C) */
+volatile float g_aht20_humidity = 50.0f;      /* AHT20湿度(%) */
+volatile uint16_t g_mq8_adc_raw = 0U;         /* MQ-8气体传感器ADC原始值 */
+volatile uint8_t g_mq8_do = 0U;               /* MQ-8气体传感器数字输出(0/1) */
+volatile uint8_t g_track_status = 0U;         /* 循迹传感器状态(4位) */
+static uint32_t g_aht20_fail_count = 0U;      /* AHT20读取失败计数 */
 
+/* 循迹传感器读取函数声明 */
 static uint8_t Sensor_GetX1(void);
 static uint8_t Sensor_GetX2(void);
 static uint8_t Sensor_GetX3(void);
@@ -41,7 +48,10 @@ static uint8_t Sensor_GetX4(void);
 
 #if SENSORTASK_VERBOSE_LOG
 /**
- * @brief 打印循迹传感器原始数据 * @param status 循迹传感器状态 */
+ * @brief 打印循迹传感器原始数据(每2秒一次)
+ * @param status 循迹传感器4位状态值
+ * @note WiFi桥接模式下不输出，避免干扰数据传输
+ */
 static void Sensor_DebugTrackRaw(uint8_t status)
 {
     static uint32_t last_print_tick = 0U;
@@ -73,7 +83,10 @@ static void Sensor_DebugTrackRaw(uint8_t status)
 #endif
 
 /**
- * @brief 读取MQ-8传感器ADC值 * @return ADC原始值 */
+ * @brief 读取MQ-8气体传感器ADC值
+ * @return ADC原始值(0-4095)
+ * @note MQ-8用于检测氢气/可燃气体，ADC值越高表示气体浓度越高
+ */
 static uint16_t Sensor_ReadMq8Adc(void)
 {
     uint16_t value = 0U;
@@ -89,29 +102,36 @@ static uint16_t Sensor_ReadMq8Adc(void)
 }
 
 /**
- * @brief 读取MLX90614寄存器 * @param reg 寄存器地址
- * @param data 数据指针
- * @return HAL状态 */
+ * @brief 读取MLX90614红外测温传感器寄存器
+ * @param reg 寄存器地址(TA=0x06环境温度, TOBJ1=0x07物体温度)
+ * @param data 16位原始数据输出指针
+ * @return HAL状态(HAL_OK/HAL_ERROR)
+ * @note 使用I2C互斥锁防止和AITask同时访问同一条I2C总线
+ */
 static HAL_StatusTypeDef MLX90614_ReadReg(uint8_t reg, uint16_t *data)
 {
-    uint8_t buf[3];
+    uint8_t buf[3];           /* 接收缓冲区：低字节、高字节、PEC校验 */
     HAL_StatusTypeDef ret = HAL_ERROR;
-    uint8_t retry = 3U;
+    uint8_t retry = 3U;      /* 失败重试次数 */
 
+    /* 加I2C互斥锁 */
     if (I2CMutexHandle != NULL) {
         osMutexAcquire(I2CMutexHandle, osWaitForever);
     }
 
+    /* 最多重试3次 */
     while (retry-- > 0U) {
         ret = HAL_I2C_Mem_Read(&BOARD_MLX_I2C, MLX90614_ADDR, reg, I2C_MEMADD_SIZE_8BIT,
                                buf, sizeof(buf), 100U);
         if (ret == HAL_OK) {
+            /* 拼接16位原始值：高字节左移8位，或上低字节 */
             *data = (uint16_t)((buf[1] << 8) | buf[0]);
             break;
         }
-        osDelay(10U);
+        osDelay(10U);  /* 失败后等10ms再重试 */
     }
 
+    /* 释放I2C互斥锁 */
     if (I2CMutexHandle != NULL) {
         osMutexRelease(I2CMutexHandle);
     }
@@ -120,10 +140,12 @@ static HAL_StatusTypeDef MLX90614_ReadReg(uint8_t reg, uint16_t *data)
 }
 
 /**
- * @brief 读取MLX90614温度
- * @param reg 寄存器地址
- * @param temp_c 温度值指针(°C)
- * @return HAL状态 */
+ * @brief 读取MLX90614温度并换算成摄氏度
+ * @param reg 寄存器地址(TA=0x06环境温度, TOBJ1=0x07物体温度)
+ * @param temp_c 温度值输出指针(°C)
+ * @return HAL状态(HAL_OK/HAL_ERROR)
+ * @note 温度公式：raw * 0.02 - 273.15（0.02是分辨率，273.15是开尔文转摄氏度）
+ */
 static HAL_StatusTypeDef MLX90614_ReadTemp(uint8_t reg, float *temp_c)
 {
     uint16_t raw;
@@ -137,8 +159,9 @@ static HAL_StatusTypeDef MLX90614_ReadTemp(uint8_t reg, float *temp_c)
 }
 
 /**
- * @brief 读取循迹传感器X1
- * @return X1状态（1-检测到黑线，0-未检测）
+ * @brief 读取循迹传感器X1(最左侧)
+ * @return X1状态：1-检测到黑线, 0-未检测到
+ * @note 传感器输出低电平表示检测到黑线(GPIO_PIN_RESET)
  */
 static uint8_t Sensor_GetX1(void)
 {
@@ -146,8 +169,8 @@ static uint8_t Sensor_GetX1(void)
 }
 
 /**
- * @brief 读取循迹传感器X2
- * @return X2状态（1-检测到黑线，0-未检测）
+ * @brief 读取循迹传感器X2(左侧)
+ * @return X2状态：1-检测到黑线, 0-未检测到
  */
 static uint8_t Sensor_GetX2(void)
 {
@@ -155,8 +178,8 @@ static uint8_t Sensor_GetX2(void)
 }
 
 /**
- * @brief 读取循迹传感器X3
- * @return X3状态（1-检测到黑线，0-未检测）
+ * @brief 读取循迹传感器X3(右侧)
+ * @return X3状态：1-检测到黑线, 0-未检测到
  */
 static uint8_t Sensor_GetX3(void)
 {
@@ -164,8 +187,8 @@ static uint8_t Sensor_GetX3(void)
 }
 
 /**
- * @brief 读取循迹传感器X4
- * @return X4状态（1-检测到黑线，0-未检测）
+ * @brief 读取循迹传感器X4(最右侧)
+ * @return X4状态：1-检测到黑线, 0-未检测到
  */
 static uint8_t Sensor_GetX4(void)
 {
@@ -173,29 +196,40 @@ static uint8_t Sensor_GetX4(void)
 }
 
 /**
- * @brief 获取循迹传感器状态 * @return 4位状态值，bit0-X1, bit1-X2, bit2-X3, bit3-X4
+ * @brief 获取循迹传感器4位状态值
+ * @return 4位状态值：bit0=X1, bit1=X2, bit2=X3, bit3=X4
+ * @note 4个传感器从左到右排列：X4 X3 X2 X1
+ *       例如：0b1000 = X4检测到，最左侧；0b0001 = X1检测到，最右侧
  */
 static uint8_t Sensor_GetTrackStatus(void)
 {
     uint8_t status = 0U;
-    status |= (uint8_t)(Sensor_GetX4() << 3);
-    status |= (uint8_t)(Sensor_GetX3() << 2);
-    status |= (uint8_t)(Sensor_GetX2() << 1);
-    status |= (uint8_t)(Sensor_GetX1() << 0);
+    status |= (uint8_t)(Sensor_GetX4() << 3);  /* X4放到bit3 */
+    status |= (uint8_t)(Sensor_GetX3() << 2);  /* X3放到bit2 */
+    status |= (uint8_t)(Sensor_GetX2() << 1);  /* X2放到bit1 */
+    status |= (uint8_t)(Sensor_GetX1() << 0);  /* X1放到bit0 */
     return status;
 }
 
 /**
- * @brief 传感器采集任务入口函数 * @param argument 任务参数（未使用） */
+ * @brief 传感器采集任务入口函数
+ * @param argument 任务参数(未使用)
+ * @details 任务流程：
+ *          1. 初始化：检测MLX90614并读取初始温度，初始化AHT20
+ *          2. 主循环(每80ms)：
+ *             - 读取循迹传感器，更新全局变量并发送到消息队列
+ *             - 每2秒：读取MLX90614温度、AHT20温湿度、MQ-8气体传感器、电池电压
+ */
 void StartSensorTask(void *argument)
 {
-    float ambient = 25.0f;
-    float object = 36.5f;
-    float aht20_temp = 25.0f;
-    float aht20_humidity = 50.0f;
-    uint32_t last_sensor_read = 0U;
+    float ambient = 25.0f;      /* MLX90614环境温度临时变量 */
+    float object = 36.5f;       /* MLX90614物体温度临时变量 */
+    float aht20_temp = 25.0f;   /* AHT20温度临时变量 */
+    float aht20_humidity = 50.0f; /* AHT20湿度临时变量 */
+    uint32_t last_sensor_read = 0U; /* 上次传感器读取时间戳 */
     (void)argument;
 
+    /* 初始化：检测并读取MLX90614初始温度 */
     if (HAL_I2C_IsDeviceReady(&BOARD_MLX_I2C, MLX90614_ADDR, 2U, 100U) == HAL_OK) {
         (void)MLX90614_ReadTemp(MLX90614_REG_TOBJ1, &object);
         (void)MLX90614_ReadTemp(MLX90614_REG_TA, &ambient);
@@ -203,6 +237,7 @@ void StartSensorTask(void *argument)
         g_mlx90614_ambient = ambient;
     }
 
+    /* 初始化：检测并读取AHT20初始温湿度 */
     if (AHT20_Init() == HAL_OK) {
         if (AHT20_Read(&aht20_temp, &aht20_humidity) == HAL_OK) {
             g_aht20_temp = aht20_temp;
@@ -216,32 +251,42 @@ void StartSensorTask(void *argument)
     }
 #endif
 
+    /* 主循环 */
     for (;;) {
-        uint8_t status = Sensor_GetTrackStatus();
+        uint8_t status = Sensor_GetTrackStatus();  /* 读取循迹传感器 */
         uint32_t now = osKernelGetTickCount();
 
-        task_run_count[4]++;
-        g_track_status = status & 0x0FU;
+        task_run_count[4]++;   /* 心跳计数 */
+        g_track_status = status & 0x0FU;  /* 更新全局变量(低4位有效) */
 #if SENSORTASK_VERBOSE_LOG
-        Sensor_DebugTrackRaw(g_track_status);
+        Sensor_DebugTrackRaw(g_track_status);  /* 打印循迹传感器调试信息 */
 #endif
+        /* 循迹数据发送到消息队列，供TrackCtrl读取 */
         (void)osMessageQueuePut(TrackHandle, &status, 0U, 0U);
 
+        /* 每2秒更新一次慢速传感器(温湿度、气体、电池) */
         if ((now - last_sensor_read) >= 2000U) {
             last_sensor_read = now;
+
+            /* 读取MLX90614物体温度 */
             if (MLX90614_ReadTemp(MLX90614_REG_TOBJ1, &object) == HAL_OK) {
                 g_mlx90614_object = object;
             }
+
+            /* 读取MLX90614环境温度 */
             if (MLX90614_ReadTemp(MLX90614_REG_TA, &ambient) == HAL_OK) {
                 g_mlx90614_ambient = ambient;
             }
+
+            /* 读取AHT20温湿度 */
             if (AHT20_Read(&aht20_temp, &aht20_humidity) == HAL_OK) {
                 g_aht20_temp = aht20_temp;
                 g_aht20_humidity = aht20_humidity;
-                g_aht20_fail_count = 0U;
+                g_aht20_fail_count = 0U;  /* 读取成功，清零失败计数 */
             } else {
-                g_aht20_fail_count++;
+                g_aht20_fail_count++;     /* 读取失败，增加计数 */
 #if SENSORTASK_DIAG_LOG
+                /* 首次失败和每10次失败打印一次日志 */
                 if ((g_aht20_fail_count == 1U) || ((g_aht20_fail_count % 10U) == 0U)) {
                     char dbg[96];
                     int temp10 = (int)(g_aht20_temp * 10.0f + ((g_aht20_temp >= 0.0f) ? 0.5f : -0.5f));
@@ -255,21 +300,22 @@ void StartSensorTask(void *argument)
                 }
 #endif
             }
+
+            /* 读取MQ-8气体传感器(模拟+数字) */
             g_mq8_adc_raw = Sensor_ReadMq8Adc();
             g_mq8_do = Board_MQ8DoRead();
 
-            /* Battery voltage detection */
+            /* 更新电池电压检测 */
             Voltage_Update();
 
-            /* Print battery status to UART */
+            /* 打印电池状态到调试串口 */
             char bat_str[32];
             Voltage_GetStatusString(bat_str, sizeof(bat_str));
             HAL_UART_Transmit(&BOARD_DEBUG_UART, (uint8_t *)bat_str, (uint16_t)strlen(bat_str), 100U);
             HAL_UART_Transmit(&BOARD_DEBUG_UART, (uint8_t *)"\r\n", 2U, 100U);
         }
 
+        /* 休眠80ms，控制任务周期 */
         osDelay(80U);
     }
 }
-
-
