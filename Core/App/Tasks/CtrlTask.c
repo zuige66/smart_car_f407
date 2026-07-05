@@ -558,6 +558,7 @@ void StartCtrlTask(void *argument)
         /* 步骤9：WiFi遥测上报(每3秒) */
         Ctrl_HandleWifiReport(&data);
 
+#if CTRLTASK_VERBOSE_LOG
         /* 调试：每秒打印一次电机命令和传感器状态 */
         {
             static uint32_t last_motor_dbg = 0U;
@@ -587,6 +588,7 @@ void StartCtrlTask(void *argument)
                             (unsigned long)osMessageQueueGetCount(TrackHandle));
             }
         }
+#endif
 
         /* 步骤10：电机命令入队，由DriverTask执行 */
         (void)osMessageQueuePut(MotorActionHandle, &cmd, 0U, 5U);

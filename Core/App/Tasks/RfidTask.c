@@ -30,8 +30,8 @@ extern volatile uint32_t task_run_count[]; /* 任务运行计数(心跳监控) *
 
 /* RC522 SPI通信参数 */
 #define RFID_SPI_TIMEOUT_MS 100U        /* SPI通信超时时间(ms) */
-#define RFID_POLL_INTERVAL_MS 200U      /* 轮询间隔(ms) */
-#define RFID_MISS_LIMIT 3U              /* 连续丢失次数阈值 */
+#define RFID_POLL_INTERVAL_MS 500U      /* 轮询间隔(ms)，降低串口刷屏频率 */
+#define RFID_MISS_LIMIT 8U              /* 连续丢失次数阈值(提高，避免贴近标签时偶发漏读就清除) */
 
 /* RC522命令寄存器指令 */
 #define RFID_CMD_IDLE 0x00U             /* 空闲命令 */
@@ -266,7 +266,7 @@ static void Rfid_ResetChip(void)
  *          4. 配置定时器(T_MODE=0x8D, T_PRESCALER=0x3E, T_RELOAD=30)
  *          5. 配置发送ASK调制(TX_ASK=0x40)
  *          6. 配置模式寄存器(MODE=0x3D)
- *          7. 配置射频增益(RFCFG=0x70)
+ *          7. 配置射频增益(RFCFG=0x7F)
  *          8. 开启天线
  */
 static void Rfid_HardwareInit(void)
@@ -280,8 +280,9 @@ static void Rfid_HardwareInit(void)
     Rfid_WriteReg(RFID_REG_T_RELOAD_H, 0U);
     Rfid_WriteReg(RFID_REG_TX_ASK, 0x40U);
     Rfid_WriteReg(RFID_REG_MODE, 0x3DU);
-    Rfid_WriteReg(RFID_REG_RFCFG, 0x70U);
+    Rfid_WriteReg(RFID_REG_RFCFG, 0x7FU);
     Rfid_AntennaOn();
+    osDelay(5U);
 }
 
 /**
@@ -489,22 +490,6 @@ static RfidStatus_t Rfid_Anticoll(uint8_t *uid)
 }
 
 /**
- * @brief 将标签置为HALT状态
- * @details 发送HLTA命令使标签进入HALT状态，
- *          下次读取需使用WUPA命令唤醒。
- */
-static void Rfid_Halt(void)
-{
-    uint8_t halt_cmd[2] = {RFID_PICC_HLTA, 0x00U};
-    uint16_t back_bits = 0U;
-    uint8_t back_data[2];
-
-    Rfid_WriteReg(RFID_REG_BIT_FRAMING, 0x00U);
-    (void)Rfid_ToCard(RFID_CMD_TRANSCEIVE, halt_cmd, sizeof(halt_cmd),
-                      back_data, sizeof(back_data), &back_bits);
-}
-
-/**
  * @brief 读取卡片完整UID (带调试输出)
  * @param uid UID缓冲区(至少5字节)
  * @param uid_size UID长度输出指针
@@ -526,10 +511,12 @@ static RfidStatus_t Rfid_ReadCardUid(uint8_t *uid, uint8_t *uid_size)
     }
 
     /* ---- 步骤1: 请求/唤醒标签 ---- */
-    Rfid_Printf("[RFID] Step1 WUPA... ");
-    if (Rfid_Request(RFID_PICC_WUPA, tag_type) != RFID_STATUS_OK) {
-        Rfid_Printf("NO_TAG\r\n");
-        return RFID_STATUS_NO_TAG;
+    Rfid_Printf("[RFID] Step1 REQA/WUPA... ");
+    if (Rfid_Request(RFID_PICC_REQIDL, tag_type) != RFID_STATUS_OK) {
+        if (Rfid_Request(RFID_PICC_WUPA, tag_type) != RFID_STATUS_OK) {
+            Rfid_Printf("NO_TAG\r\n");
+            return RFID_STATUS_NO_TAG;
+        }
     }
     Rfid_Printf("OK (tag_type=0x%02X%02X)\r\n", tag_type[0], tag_type[1]);
 
@@ -551,11 +538,8 @@ static RfidStatus_t Rfid_ReadCardUid(uint8_t *uid, uint8_t *uid_size)
                     (xor_check == uid[4]) ? "OK" : "MISMATCH");
     }
 
-    /* ---- 步骤3: HALF ---- */
-    Rfid_Printf("[RFID] Step3 Halt... ");
+    /* ---- 步骤3: 保持标签可继续被轮询，不主动HALT ---- */
     *uid_size = 4U;
-    Rfid_Halt();
-    Rfid_Printf("OK\r\n");
 
     return RFID_STATUS_OK;
 }
@@ -701,28 +685,14 @@ void StartRfidTask(void *argument)
             /* 读取失败，增加丢失计数 */
             Rfid_Printf("[RFID] read FAIL status=%d miss=%u/%u\r\n",
                         (int)read_status, (unsigned)miss_count, (unsigned)RFID_MISS_LIMIT);
-            if (miss_count < 0xFFU) {
+            if (miss_count < RFID_MISS_LIMIT) {
                 ++miss_count;
             }
 
-            /* 连续丢失超过阈值 */
-            if (miss_count >= RFID_MISS_LIMIT) {
-                /* 如果之前有标签，打印丢失日志 */
-                if (g_rfid_last_uid_size > 0U) {
-                    Rfid_Printf("[RFID] TAG LOST  id=%u last_uid_size=%u\r\n",
-                                (unsigned)Rfid_ReadTag(),
-                                (unsigned)g_rfid_last_uid_size);
-                }
-                /* 清除UID记录和位置映射 */
-                g_rfid_last_uid_size = 0U;
-                memset(g_rfid_last_uid, 0, sizeof(g_rfid_last_uid));
-                Rfid_ClearTag();
-
-                /* 增加硬件恢复计数 */
+            if (read_status == RFID_STATUS_ERROR) {
                 reset_count++;
-                Rfid_Printf("[RFID] reset_count=%u\r\n", (unsigned)reset_count);
-                if (reset_count >= 5U) {
-                    /* 连续5次丢失，执行硬件恢复 */
+                Rfid_Printf("[RFID] error_count=%u\r\n", (unsigned)reset_count);
+                if (reset_count >= 3U) {
                     Rfid_Printf("[RFID] **** HW RECOVERY RESET ****\r\n");
                     Rfid_RecoveryReset();
                     reset_count = 0U;
@@ -732,6 +702,20 @@ void StartRfidTask(void *argument)
                     Rfid_ClearTag();
                     Rfid_Printf("[RFID] **** HW RECOVERY DONE ****\r\n");
                 }
+            } else {
+                reset_count = 0U;
+            }
+
+            /* 连续普通漏读超过阈值后才清除标签；NO_TAG不再触发硬件复位 */
+            if (miss_count >= RFID_MISS_LIMIT) {
+                if (g_rfid_last_uid_size > 0U) {
+                    Rfid_Printf("[RFID] TAG LOST  id=%u last_uid_size=%u\r\n",
+                                (unsigned)Rfid_ReadTag(),
+                                (unsigned)g_rfid_last_uid_size);
+                }
+                g_rfid_last_uid_size = 0U;
+                memset(g_rfid_last_uid, 0, sizeof(g_rfid_last_uid));
+                Rfid_ClearTag();
             }
         }
     }

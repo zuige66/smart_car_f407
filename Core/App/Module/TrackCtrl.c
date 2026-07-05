@@ -14,6 +14,7 @@
 #include <string.h>
 #include "board_compat.h"
 #include "pid.h"
+#include "cmsis_os2.h"
 
 /**
  * @brief 循迹模式枚举
@@ -36,18 +37,22 @@ static uint32_t g_track_mode_ticks = 0U; /* 当前模式持续tick数 */
 static uint8_t g_lost_line_count = 0U;   /* 连续丢线计数(防抖) */
 
 /* 循迹控制参数 */
-#define TARGET_SPEED             200.0f   /* 目标速度(降低，更稳定) */
+#define TARGET_SPEED             230.0f   /* 目标速度：整体慢一点 */
 #define TRACK_CTRL_DT_S          0.08f    /* 控制周期(秒，匹配传感器80ms更新) */
-#define TRACK_PWM_MIN            80       /* PWM最小值 */
-#define TRACK_PWM_MAX            500      /* PWM最大值(降低，减少突变) */
-#define TRACK_LOST_GAIN          1.8f     /* 轨道丢失时的增益系数 */
-#define TRACK_CROSS_SPEED        180U     /* 十字路口通过速度 */
-#define TRACK_SHARP_TURN_SPEED   140U     /* 急转时基础速度 */
-#define TRACK_SEARCH_SPEED       120U     /* 搜索时基础速度 */
-#define TRACK_TURN_PWM_DIFF_MAX  60U      /* 转弯时左右轮最大差速(减小，更平滑) */
+#define TRACK_PWM_MIN            100      /* PWM最小值 */
+#define TRACK_PWM_MAX            360      /* PWM最大值：降低整体速度 */
+#define TRACK_LOST_GAIN          1.2f     /* 轨道丢失时的增益系数 */
+#define TRACK_CROSS_SPEED        170U     /* 十字路口通过速度 */
+#define TRACK_SHARP_TURN_SPEED   160U     /* 急转时基础速度 */
+#define TRACK_SEARCH_SPEED       210U     /* 搜索时基础速度 */
+#define TRACK_TURN_GAIN          85       /* 转向比例系数：ERR=1时差速约85 */
+#define TRACK_TURN_PWM_DIFF_MAX  170U     /* 转弯时左右轮最大差速 */
+#define TRACK_INNER_LINE_SPEED   190.0f   /* 0010/0100轻偏时降低基础速度 */
+#define TRACK_LOST_TURN_SPEED    230.0f   /* 0000短暂丢线时保持转弯速度 */
 #define TRACK_CROSS_HOLD_TICKS   8U       /* 十字路口保持tick数 */
-#define TRACK_SHARP_HOLD_TICKS   25U      /* 急转保持tick数 */
-#define TRACK_SEARCH_TIMEOUT_TICKS 50U    /* 搜索超时tick数 */
+#define TRACK_SHARP_HOLD_TICKS   2U       /* 急转最小保持tick数 */
+#define TRACK_LOST_HOLD_TICKS    10U      /* 丢线后继续沿上次方向转弯的tick数 */
+#define TRACK_SEARCH_TIMEOUT_TICKS 30U    /* 搜索超时tick数 */
 
 /**
  * @brief 计算循迹误差
@@ -189,8 +194,7 @@ static uint8_t TrackCtrl_IsSharpLeft(uint8_t track_data, int8_t track_error)
         return 0U;
     }
 
-    return (track_data == 0x01U || track_data == 0x03U ||
-            track_data == 0x0DU || track_data == 0x0EU)
+    return (track_data == 0x03U || track_data == 0x0DU || track_data == 0x0EU)
                ? 1U
                : 0U;
 }
@@ -207,8 +211,7 @@ static uint8_t TrackCtrl_IsSharpRight(uint8_t track_data, int8_t track_error)
         return 0U;
     }
 
-    return (track_data == 0x0BU || track_data == 0x08U ||
-            track_data == 0x0CU)
+    return (track_data == 0x0BU || track_data == 0x0CU)
                ? 1U
                : 0U;
 }
@@ -311,42 +314,41 @@ MotorCmd_t TrackCtrl_Run(SensorData_t *data)
     MotorCmd_t cmd = {0};
     int8_t track_error = TrackCtrl_CalculateError(track_data);
     float base_pwm = TARGET_SPEED;
-    int32_t left_pwm;
-    int32_t right_pwm;
+    int32_t turn_output = 0;
+    int32_t left_pwm = 0;
+    int32_t right_pwm = 0;
 
-    /* 更新最后检测到的偏移方向 */
+    if (track_data == 0x02U || track_data == 0x04U) {
+        base_pwm = TRACK_INNER_LINE_SPEED;
+    }
+
     if (TrackCtrl_HasUsableLine(track_data) && track_error != 0) {
         g_last_track_error = track_error;
     }
 
-    /* 状态机退出条件检查 */
     switch (g_track_mode) {
     case TRACK_MODE_CROSS:
-        /* 十字路口模式: 检测到可用轨道且居中时返回跟随模式 */
         if (g_track_mode_ticks >= TRACK_CROSS_HOLD_TICKS &&
             TrackCtrl_HasUsableLine(track_data) &&
             TrackCtrl_IsCenteredLine(track_data)) {
             TrackCtrl_SetMode(TRACK_MODE_FOLLOW);
         } else if (g_track_mode_ticks >= TRACK_SEARCH_TIMEOUT_TICKS && track_data == 0x00U) {
-            /* 超时且丢失轨道，进入搜索模式 */
             TrackCtrl_SetMode((TrackCtrl_GetLastDirection() < 0) ? TRACK_MODE_SEARCH_LEFT : TRACK_MODE_SEARCH_RIGHT);
         }
         break;
     case TRACK_MODE_SHARP_LEFT:
-        /* 急左转模式: 最少保持一定时间，然后检测到居中时返回跟随模式 */
-        if (g_track_mode_ticks >= TRACK_SHARP_HOLD_TICKS &&
-            TrackCtrl_HasUsableLine(track_data) &&
-            track_error >= -1) {
+        if (TrackCtrl_HasUsableLine(track_data) &&
+            (TrackCtrl_IsCenteredLine(track_data) ||
+             (g_track_mode_ticks >= TRACK_SHARP_HOLD_TICKS && track_error >= -1))) {
             TrackCtrl_SetMode(TRACK_MODE_FOLLOW);
         } else if (g_track_mode_ticks >= TRACK_SEARCH_TIMEOUT_TICKS && track_data == 0x00U) {
             TrackCtrl_SetMode(TRACK_MODE_SEARCH_LEFT);
         }
         break;
     case TRACK_MODE_SHARP_RIGHT:
-        /* 急右转模式: 最少保持一定时间，然后检测到居中时返回跟随模式 */
-        if (g_track_mode_ticks >= TRACK_SHARP_HOLD_TICKS &&
-            TrackCtrl_HasUsableLine(track_data) &&
-            track_error <= 1) {
+        if (TrackCtrl_HasUsableLine(track_data) &&
+            (TrackCtrl_IsCenteredLine(track_data) ||
+             (g_track_mode_ticks >= TRACK_SHARP_HOLD_TICKS && track_error <= 1))) {
             TrackCtrl_SetMode(TRACK_MODE_FOLLOW);
         } else if (g_track_mode_ticks >= TRACK_SEARCH_TIMEOUT_TICKS && track_data == 0x00U) {
             TrackCtrl_SetMode(TRACK_MODE_SEARCH_RIGHT);
@@ -354,9 +356,10 @@ MotorCmd_t TrackCtrl_Run(SensorData_t *data)
         break;
     case TRACK_MODE_SEARCH_LEFT:
     case TRACK_MODE_SEARCH_RIGHT:
-        /* 搜索模式: 检测到轨道或十字路口时返回跟随模式 */
         if (TrackCtrl_HasUsableLine(track_data) || TrackCtrl_IsCrossRoad(track_data)) {
             TrackCtrl_SetMode(TRACK_MODE_FOLLOW);
+        } else if (g_track_mode_ticks >= TRACK_SEARCH_TIMEOUT_TICKS) {
+            TrackCtrl_SetMode((g_track_mode == TRACK_MODE_SEARCH_LEFT) ? TRACK_MODE_SEARCH_RIGHT : TRACK_MODE_SEARCH_LEFT);
         }
         break;
     case TRACK_MODE_FOLLOW:
@@ -364,19 +367,10 @@ MotorCmd_t TrackCtrl_Run(SensorData_t *data)
         break;
     }
 
-    /* 状态机进入条件检查(仅在跟随模式下) */
     if (g_track_mode == TRACK_MODE_FOLLOW) {
         if (TrackCtrl_IsCrossRoad(track_data)) {
             TrackCtrl_SetMode(TRACK_MODE_CROSS);
             g_lost_line_count = 0U;
-            /* 调试：打印十字路口检测 */
-            {
-                char dbg[64];
-                (void)snprintf(dbg, sizeof(dbg),
-                               "[CROSS] detected track=0x%02X\r\n",
-                               (unsigned)track_data);
-                HAL_UART_Transmit(&BOARD_DEBUG_UART, (uint8_t *)dbg, (uint16_t)strlen(dbg), 50U);
-            }
         } else if (TrackCtrl_IsSharpLeft(track_data, track_error)) {
             TrackCtrl_SetMode(TRACK_MODE_SHARP_LEFT);
             g_lost_line_count = 0U;
@@ -385,8 +379,7 @@ MotorCmd_t TrackCtrl_Run(SensorData_t *data)
             g_lost_line_count = 0U;
         } else if (track_data == 0x00U) {
             g_lost_line_count++;
-            /* 连续3次丢线才进搜索，防止单次噪声误触发 */
-            if (g_lost_line_count >= 3U) {
+            if (g_lost_line_count >= TRACK_LOST_HOLD_TICKS) {
                 g_lost_line_count = 0U;
                 TrackCtrl_SetMode((TrackCtrl_GetLastDirection() < 0) ? TRACK_MODE_SEARCH_LEFT : TRACK_MODE_SEARCH_RIGHT);
             }
@@ -395,10 +388,8 @@ MotorCmd_t TrackCtrl_Run(SensorData_t *data)
         }
     }
 
-    /* 更新模式持续时间 */
     g_track_mode_ticks++;
 
-    /* 根据当前模式生成电机命令 */
     switch (g_track_mode) {
     case TRACK_MODE_CROSS:
         return TrackCtrl_MakeForward(TRACK_CROSS_SPEED, TRACK_CROSS_SPEED);
@@ -415,55 +406,23 @@ MotorCmd_t TrackCtrl_Run(SensorData_t *data)
         break;
     }
 
-    /* 调试：打印当前模式和track数据 */
-    {
-        char dbg[96];
-        (void)snprintf(dbg, sizeof(dbg),
-                       "[TRACK] mode=%d track=0x%02X err=%d\r\n",
-                       (int)g_track_mode, (unsigned)track_data, (int)track_error);
-        HAL_UART_Transmit(&BOARD_DEBUG_UART, (uint8_t *)dbg, (uint16_t)strlen(dbg), 50U);
-    }
-
-    /* 丢线期间(防抖中)直接直行，不用PID，防止积分累积 */
     if (track_data == 0x00U) {
-        PID_Reset(&turn_pid);
-        return TrackCtrl_MakeForward((uint16_t)TARGET_SPEED, (uint16_t)TARGET_SPEED);
+        if (g_last_track_error != 0) {
+            track_error = g_last_track_error;
+        }
+        base_pwm = TRACK_LOST_TURN_SPEED;
     }
 
-    /* 跟随模式下的PID控制 */
-    if (BOARD_HAS_ENCODER) {
-        /* 使用编码器反馈进行速度控制 */
-        base_pwm = PID_Compute(&speed_pid, (float)data->encoder_speed);
-        if (base_pwm < TRACK_PWM_MIN) {
-            base_pwm = TRACK_PWM_MIN;
-        }
+    turn_output = (int32_t)track_error * (int32_t)TRACK_TURN_GAIN;
+    if (turn_output > (int32_t)TRACK_TURN_PWM_DIFF_MAX) {
+        turn_output = (int32_t)TRACK_TURN_PWM_DIFF_MAX;
+    } else if (turn_output < -(int32_t)TRACK_TURN_PWM_DIFF_MAX) {
+        turn_output = -(int32_t)TRACK_TURN_PWM_DIFF_MAX;
     }
 
-    /* 计算转向输出 (限制差速) */
-    {
-        float turn_output = PID_Compute(&turn_pid, (float)track_error);
+    left_pwm = (int32_t)base_pwm + turn_output;
+    right_pwm = (int32_t)base_pwm - turn_output;
 
-        /* 调试：打印PID原始输出 */
-        {
-            char dbg[96];
-            (void)snprintf(dbg, sizeof(dbg),
-                           "[PID] err=%d raw=%.1f I=%.1f\r\n",
-                           (int)track_error, turn_output, turn_pid.integral);
-            HAL_UART_Transmit(&BOARD_DEBUG_UART, (uint8_t *)dbg, (uint16_t)strlen(dbg), 50U);
-        }
-
-        /* 限制转向输出幅度 */
-        if (turn_output > TRACK_TURN_PWM_DIFF_MAX) {
-            turn_output = TRACK_TURN_PWM_DIFF_MAX;
-        } else if (turn_output < -TRACK_TURN_PWM_DIFF_MAX) {
-            turn_output = -TRACK_TURN_PWM_DIFF_MAX;
-        }
-
-        left_pwm = (int32_t)(base_pwm + turn_output);
-        right_pwm = (int32_t)(base_pwm - turn_output);
-    }
-
-    /* PWM限幅 */
     if (left_pwm < TRACK_PWM_MIN) {
         left_pwm = TRACK_PWM_MIN;
     } else if (left_pwm > TRACK_PWM_MAX) {
@@ -475,17 +434,32 @@ MotorCmd_t TrackCtrl_Run(SensorData_t *data)
         right_pwm = TRACK_PWM_MAX;
     }
 
-    /* 生成前进命令 */
     cmd = TrackCtrl_MakeForward((uint16_t)left_pwm, (uint16_t)right_pwm);
 
-    /* 调试：打印PWM值 */
     {
-        char dbg[96];
-        (void)snprintf(dbg, sizeof(dbg),
-                       "[PWM] L=%d R=%d base=%.1f\r\n",
-                       (int)left_pwm, (int)right_pwm, base_pwm);
-        HAL_UART_Transmit(&BOARD_DEBUG_UART, (uint8_t *)dbg, (uint16_t)strlen(dbg), 50U);
+        static uint32_t last_track_dbg_tick = 0U;
+        uint32_t now_track_dbg = osKernelGetTickCount();
+        char dbg[160];
+        uint8_t b3 = (uint8_t)((track_data >> 3) & 0x01U);
+        uint8_t b2 = (uint8_t)((track_data >> 2) & 0x01U);
+        uint8_t b1 = (uint8_t)((track_data >> 1) & 0x01U);
+        uint8_t b0 = (uint8_t)(track_data & 0x01U);
+
+        if ((now_track_dbg - last_track_dbg_tick) >= 120U) {
+            last_track_dbg_tick = now_track_dbg;
+            (void)snprintf(dbg, sizeof(dbg),
+                           "FW=PIDP7,TRK=%u%u%u%u,N=%u,MODE=%s,SYS=%u,ERR=%d,PID=%d,L=%d,R=%d\r\n",
+                           (unsigned)b3, (unsigned)b2, (unsigned)b1, (unsigned)b0,
+                           (unsigned)track_data,
+                           TrackCtrl_GetModeName(),
+                           (unsigned)data->state,
+                           (int)track_error,
+                           (int)turn_output,
+                           (int)left_pwm,
+                           (int)right_pwm);
+            (void)HAL_UART_Transmit(&BOARD_DEBUG_UART, (uint8_t *)dbg, (uint16_t)strlen(dbg), 50U);
+        }
     }
 
     return cmd;
-}                                                                                                                                                               
+}

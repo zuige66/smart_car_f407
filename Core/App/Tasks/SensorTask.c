@@ -159,9 +159,9 @@ static HAL_StatusTypeDef MLX90614_ReadTemp(uint8_t reg, float *temp_c)
 }
 
 /**
- * @brief 读取循迹传感器X1(最左侧)
+ * @brief 读取循迹传感器X1(最右侧)
  * @return X1状态：1-检测到黑线, 0-未检测到
- * @note 传感器输出低电平表示检测到黑线(GPIO_PIN_RESET)
+ * @note 循迹模块低电平有效；这里转换成软件语义：黑线=1，白地=0
  */
 static uint8_t Sensor_GetX1(void)
 {
@@ -169,7 +169,7 @@ static uint8_t Sensor_GetX1(void)
 }
 
 /**
- * @brief 读取循迹传感器X2(左侧)
+ * @brief 读取循迹传感器X2(右侧)
  * @return X2状态：1-检测到黑线, 0-未检测到
  */
 static uint8_t Sensor_GetX2(void)
@@ -178,7 +178,7 @@ static uint8_t Sensor_GetX2(void)
 }
 
 /**
- * @brief 读取循迹传感器X3(右侧)
+ * @brief 读取循迹传感器X3(左侧)
  * @return X3状态：1-检测到黑线, 0-未检测到
  */
 static uint8_t Sensor_GetX3(void)
@@ -187,7 +187,7 @@ static uint8_t Sensor_GetX3(void)
 }
 
 /**
- * @brief 读取循迹传感器X4(最右侧)
+ * @brief 读取循迹传感器X4(最左侧)
  * @return X4状态：1-检测到黑线, 0-未检测到
  */
 static uint8_t Sensor_GetX4(void)
@@ -204,10 +204,11 @@ static uint8_t Sensor_GetX4(void)
 static uint8_t Sensor_GetTrackStatus(void)
 {
     uint8_t status = 0U;
-    status |= (uint8_t)(Sensor_GetX4() << 3);  /* X4放到bit3 */
-    status |= (uint8_t)(Sensor_GetX3() << 2);  /* X3放到bit2 */
-    status |= (uint8_t)(Sensor_GetX2() << 1);  /* X2放到bit1 */
-    status |= (uint8_t)(Sensor_GetX1() << 0);  /* X1放到bit0 */
+    /* bit0=X4(最左), bit3=X1(最右) — 与TrackCtrl的CalculateError编码一致 */
+    status |= (uint8_t)(Sensor_GetX4() << 0);  /* X4(最左)放到bit0 */
+    status |= (uint8_t)(Sensor_GetX3() << 1);  /* X3放到bit1 */
+    status |= (uint8_t)(Sensor_GetX2() << 2);  /* X2放到bit2 */
+    status |= (uint8_t)(Sensor_GetX1() << 3);  /* X1(最右)放到bit3 */
     return status;
 }
 

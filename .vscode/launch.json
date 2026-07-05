@@ -5,6 +5,7 @@
       "name": "STM32 Smart Car Debug",
       "type": "cortex-debug",
       "request": "launch",
+      "showDevDebugOutput": "raw",
       "cwd": "${workspaceFolder}",
       "servertype": "stlink",
       "serverpath": "D:/develop/STM32CubeCLT_1.21.0/STLink-gdb-server/bin/ST-LINK_gdbserver.exe",

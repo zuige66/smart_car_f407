@@ -198,6 +198,7 @@ void StartDriverTask(void *argument)
             timeout_count++;
         }
 
+#if DRIVERTASK_VERBOSE_LOG
         /* 每1秒打印一次简要调试信息 */
         {
             static uint32_t last_drv_dbg = 0U;
@@ -228,6 +229,7 @@ void StartDriverTask(void *argument)
                 (void)HAL_UART_Transmit(&BOARD_DEBUG_UART, (uint8_t *)buf, (uint16_t)strlen(buf), 100U);
             }
         }
+#endif
 
 #if DRIVERTASK_VERBOSE_LOG
         /* 每1秒打印一次详细调试信息(仅启用VERBOSE_LOG时) */
