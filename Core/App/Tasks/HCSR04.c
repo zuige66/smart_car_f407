@@ -16,7 +16,7 @@
 #include "tim.h"            /* 定时器驱动(TIM1用于微秒计时) */
 #include "WifiComm.h"       /* WiFi通信(桥接模式判断) */
 
-#define HCSR04_VERBOSE_LOG 1  /* 是否启用详细调试日志(0=关闭,1=开启) */
+#define HCSR04_VERBOSE_LOG 0  /* 是否启用详细调试日志(0=关闭,1=开启) */
 
 /* HCSR04采样参数 */
 #define HCSR04_SAMPLES 5U             /* 每次测量采样次数 */

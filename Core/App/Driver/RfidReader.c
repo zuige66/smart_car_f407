@@ -45,6 +45,17 @@ static uint8_t Rfid_CompressUid(const uint8_t *uid, uint8_t uid_size)
 }
 
 /**
+ * @brief 调试用：计算并返回UID的CRC8压缩值(不修改内部状态)
+ * @param uid UID数据指针
+ * @param uid_size UID长度
+ * @return CRC8压缩值
+ */
+uint8_t Rfid_CalcCompressedId(const uint8_t *uid, uint8_t uid_size)
+{
+    return Rfid_CompressUid(uid, uid_size);
+}
+
+/**
  * @brief 初始化RFID读取器
  */
 void Rfid_Init(void)

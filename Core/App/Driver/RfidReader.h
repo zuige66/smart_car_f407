@@ -47,4 +47,12 @@ void Rfid_ClearTag(void);
  */
 void Rfid_UpdateUid(const uint8_t *uid, uint8_t uid_size);
 
+/**
+ * @brief 计算UID的CRC8压缩值(调试用，不修改内部状态)
+ * @param uid UID数据指针
+ * @param uid_size UID长度
+ * @return CRC8压缩值
+ */
+uint8_t Rfid_CalcCompressedId(const uint8_t *uid, uint8_t uid_size);
+
 #endif
