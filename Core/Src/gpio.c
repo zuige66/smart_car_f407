@@ -53,7 +53,8 @@ void MX_GPIO_Init(void)
   __HAL_RCC_GPIOD_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOE, BUZZER_IN_Pin|STBY_L_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(GPIOE, BUZZER_IN_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOE, STBY_L_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOA, DS18B20_DQ_Pin|BIN2_R_Pin, GPIO_PIN_RESET);

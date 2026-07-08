@@ -8,6 +8,7 @@
   */
 
 #include "BatteryCtrl.h"
+#include "VoltageDetect.h"
 
 /**
  * @brief 初始化电池控制器
@@ -24,7 +25,7 @@ void BatteryCtrl_Init(void)
  */
 uint8_t Battery_GetPercent(void)
 {
-    return 100U;
+    return Voltage_GetBatteryPercent();
 }
 
 /**
@@ -34,7 +35,7 @@ uint8_t Battery_GetPercent(void)
  */
 uint16_t Battery_GetVoltage(void)
 {
-    return 12000U;
+    return (uint16_t)(Voltage_GetBatteryVoltage() * 1000.0f + 0.5f);
 }
 
 /**

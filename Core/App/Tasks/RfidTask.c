@@ -30,8 +30,11 @@ extern volatile uint32_t task_run_count[]; /* 任务运行计数(心跳监控) *
 
 /* RC522 SPI通信参数 */
 #define RFID_SPI_TIMEOUT_MS 100U        /* SPI通信超时时间(ms) */
-#define RFID_POLL_INTERVAL_MS 500U      /* 轮询间隔(ms)，降低串口刷屏频率 */
-#define RFID_MISS_LIMIT 8U              /* 连续丢失次数阈值(提高，避免贴近标签时偶发漏读就清除) */
+#define RFID_POLL_INTERVAL_MS 200U      /* 轮询间隔(ms)，提高贴近标签后的响应速度 */
+#define RFID_MISS_LIMIT 24U             /* 连续丢失次数阈值，避免偶发漏读导致WiFi变unknown */
+#define RFID_FAIL_LOG_DIV 8U            /* 普通NO_TAG限频打印，避免串口阻塞RFID任务 */
+#define RFID_REQUEST_RETRY 6U           /* 每轮读卡内REQA/WUPA重试次数，提高识别灵敏度 */
+#define RFID_DIAG_INTERVAL_MS 500U      /* RFID专用串口诊断周期 */
 
 /* RC522命令寄存器指令 */
 #define RFID_CMD_IDLE 0x00U             /* 空闲命令 */
@@ -282,7 +285,69 @@ static void Rfid_HardwareInit(void)
     Rfid_WriteReg(RFID_REG_MODE, 0x3DU);
     Rfid_WriteReg(RFID_REG_RFCFG, 0x7FU);
     Rfid_AntennaOn();
-    osDelay(5U);
+    osDelay(20U);
+}
+
+static void Rfid_EnsureRfField(void)
+{
+    uint8_t tx_control = Rfid_ReadReg(RFID_REG_TX_CONTROL);
+    uint8_t rf_cfg = Rfid_ReadReg(RFID_REG_RFCFG);
+
+    if ((tx_control & 0x03U) != 0x03U) {
+        Rfid_AntennaOn();
+    }
+    if (rf_cfg != 0x7FU) {
+        Rfid_WriteReg(RFID_REG_RFCFG, 0x7FU);
+    }
+    if (Rfid_ReadReg(RFID_REG_TX_ASK) != 0x40U) {
+        Rfid_WriteReg(RFID_REG_TX_ASK, 0x40U);
+    }
+    if (Rfid_ReadReg(RFID_REG_MODE) != 0x3DU) {
+        Rfid_WriteReg(RFID_REG_MODE, 0x3DU);
+    }
+}
+
+static void Rfid_PrintStatus(const char *prefix)
+{
+    Rfid_Printf("[RFIDREG] %s VER=0x%02X TX=0x%02X ASK=0x%02X MODE=0x%02X RFCFG=0x%02X\r\n",
+                prefix,
+                Rfid_ReadReg(RFID_REG_VERSION),
+                Rfid_ReadReg(RFID_REG_TX_CONTROL),
+                Rfid_ReadReg(RFID_REG_TX_ASK),
+                Rfid_ReadReg(RFID_REG_MODE),
+                Rfid_ReadReg(RFID_REG_RFCFG));
+    Rfid_Printf("[RFIDBUS] %s ERR=0x%02X FIFO=%u IRQ=0x%02X CS=%u PD5=%u PD7=%u SPIST=%d SPIERR=0x%08lX\r\n",
+                prefix,
+                Rfid_ReadReg(RFID_REG_ERROR),
+                (unsigned)Rfid_ReadReg(RFID_REG_FIFO_LEVEL),
+                Rfid_ReadReg(RFID_REG_COMMIRQ),
+                (unsigned)HAL_GPIO_ReadPin(RC522_SDA_GPIO_Port, RC522_SDA_Pin),
+                (unsigned)HAL_GPIO_ReadPin(RFID_IRQ_GPIO_Port, RFID_IRQ_Pin),
+                (unsigned)HAL_GPIO_ReadPin(RFID_IRQD7_GPIO_Port, RFID_IRQD7_Pin),
+                (int)HAL_SPI_GetState(&hspi1),
+                (unsigned long)HAL_SPI_GetError(&hspi1));
+    Rfid_Printf("[RFIDSPI] %s BR=%lu CR1=0x%04lX SR=0x%04lX\r\n",
+                prefix,
+                (unsigned long)hspi1.Init.BaudRatePrescaler,
+                (unsigned long)hspi1.Instance->CR1,
+                (unsigned long)hspi1.Instance->SR);
+}
+
+static void Rfid_PrintTransferProbe(const char *prefix)
+{
+    uint8_t ver_a = Rfid_ReadReg(RFID_REG_VERSION);
+    uint8_t ver_b = Rfid_ReadReg(RFID_REG_VERSION);
+
+    Rfid_WriteReg(RFID_REG_RFCFG, 0x7FU);
+    Rfid_WriteReg(RFID_REG_TX_ASK, 0x40U);
+    Rfid_AntennaOn();
+    Rfid_Printf("[RFIDPROBE] %s VER1=0x%02X VER2=0x%02X TX=0x%02X ASK=0x%02X RFCFG=0x%02X\r\n",
+                prefix,
+                ver_a,
+                ver_b,
+                Rfid_ReadReg(RFID_REG_TX_CONTROL),
+                Rfid_ReadReg(RFID_REG_TX_ASK),
+                Rfid_ReadReg(RFID_REG_RFCFG));
 }
 
 /**
@@ -503,6 +568,8 @@ static RfidStatus_t Rfid_Anticoll(uint8_t *uid)
 static RfidStatus_t Rfid_ReadCardUid(uint8_t *uid, uint8_t *uid_size)
 {
     uint8_t tag_type[2];
+    uint8_t found = 0U;
+    uint8_t found_try = 0U;
 
     /* 参数校验 */
     if ((uid == NULL) || (uid_size == NULL)) {
@@ -511,31 +578,71 @@ static RfidStatus_t Rfid_ReadCardUid(uint8_t *uid, uint8_t *uid_size)
     }
 
     /* ---- 步骤1: 请求/唤醒标签 ---- */
-    Rfid_Printf("[RFID] Step1 REQA/WUPA... ");
-    if (Rfid_Request(RFID_PICC_REQIDL, tag_type) != RFID_STATUS_OK) {
-        if (Rfid_Request(RFID_PICC_WUPA, tag_type) != RFID_STATUS_OK) {
-            Rfid_Printf("NO_TAG\r\n");
-            return RFID_STATUS_NO_TAG;
-        }
+    if (RFIDTASK_VERBOSE_LOG) {
+        Rfid_Printf("[RFID] Step1 REQA/WUPA retry=%u... ", (unsigned)RFID_REQUEST_RETRY);
     }
-    Rfid_Printf("OK (tag_type=0x%02X%02X)\r\n", tag_type[0], tag_type[1]);
+    for (uint8_t try_count = 0U; try_count < RFID_REQUEST_RETRY; ++try_count) {
+        Rfid_EnsureRfField();
+        if (Rfid_Request(RFID_PICC_REQIDL, tag_type) == RFID_STATUS_OK) {
+            found = 1U;
+            found_try = try_count;
+            break;
+        }
+        osDelay(2U);
+        if (Rfid_Request(RFID_PICC_WUPA, tag_type) == RFID_STATUS_OK) {
+            found = 1U;
+            found_try = try_count;
+            break;
+        }
+        osDelay(3U);
+    }
+    if (!found) {
+        if (RFIDTASK_VERBOSE_LOG) {
+            Rfid_Printf("NO_TAG\r\n");
+        }
+        return RFID_STATUS_NO_TAG;
+    }
+    if (RFIDTASK_VERBOSE_LOG) {
+        Rfid_Printf("OK try=%u type=0x%02X%02X\r\n",
+                    (unsigned)found_try,
+                    tag_type[0],
+                    tag_type[1]);
+    }
 
     /* ---- 步骤2: 防冲突检测读取UID ---- */
-    Rfid_Printf("[RFID] Step2 Anticoll... ");
-    if (Rfid_Anticoll(uid) != RFID_STATUS_OK) {
-        Rfid_Printf("ERROR\r\n");
-        return RFID_STATUS_ERROR;
+    Rfid_WriteReg(RFID_REG_BIT_FRAMING, 0x00U);
+    if (RFIDTASK_VERBOSE_LOG) {
+        Rfid_Printf("[RFID] Step2 Anticoll retry... ");
     }
+    for (uint8_t try_count = 0U; try_count < 3U; ++try_count) {
+        if (Rfid_Anticoll(uid) == RFID_STATUS_OK) {
+            if (RFIDTASK_VERBOSE_LOG) {
+                Rfid_Printf("OK try=%u ", (unsigned)try_count);
+            }
+            goto rfid_uid_ok;
+        }
+        osDelay(2U);
+    }
+    if (RFIDTASK_VERBOSE_LOG) {
+        Rfid_Printf("ERROR\r\n");
+    }
+    return RFID_STATUS_ERROR;
+
+rfid_uid_ok:
     /* 打印原始UID */
-    Rfid_Printf("OK UID=");
-    for (uint8_t i = 0U; i < 4U; ++i) {
-        Rfid_Printf("%s%02X", (i > 0U) ? ":" : "", uid[i]);
+    if (RFIDTASK_VERBOSE_LOG) {
+        Rfid_Printf("OK UID=");
+        for (uint8_t i = 0U; i < 4U; ++i) {
+            Rfid_Printf("%s%02X", (i > 0U) ? ":" : "", uid[i]);
+        }
     }
     /* 打印校验和 */
     {
         uint8_t xor_check = uid[0] ^ uid[1] ^ uid[2] ^ uid[3];
-        Rfid_Printf(" xor=%02X(%s)\r\n", xor_check,
-                    (xor_check == uid[4]) ? "OK" : "MISMATCH");
+        if (RFIDTASK_VERBOSE_LOG) {
+            Rfid_Printf(" xor=%02X(%s)\r\n", xor_check,
+                        (xor_check == uid[4]) ? "OK" : "MISMATCH");
+        }
     }
 
     /* ---- 步骤3: 保持标签可继续被轮询，不主动HALT ---- */
@@ -605,6 +712,7 @@ void StartRfidTask(void *argument)
     uint8_t reset_count = 0U;     /* 连续丢失后的重置计数 */
     uint8_t uid[5];               /* UID缓冲区 */
     uint8_t uid_size = 0U;        /* UID长度 */
+    uint32_t last_diag_tick = 0U; /* RFID诊断输出节流 */
     (void)argument;
 
     /* 初始化RFID位置映射模块 */
@@ -618,6 +726,8 @@ void StartRfidTask(void *argument)
         uint8_t version = Rfid_ReadReg(RFID_REG_VERSION);
         Rfid_Printf("[RFID] Chip version=0x%02X (0x91=v1.0, 0x92=v2.0, 0x00/0xFF=SPI error)\r\n",
                     (unsigned)version);
+        Rfid_PrintTransferProbe("INIT");
+        Rfid_PrintStatus("INIT");
         if (version == 0x00U || version == 0xFFU) {
             Rfid_Printf("[RFID] ERROR: SPI communication failed! Check wiring:\r\n");
             Rfid_Printf("  SCK=PA5  MISO=PA6  MOSI=PA7  CS=PD3  IRQ=PD7\r\n");
@@ -631,25 +741,43 @@ void StartRfidTask(void *argument)
     for (;;) {
         /* 等待中断标志或超时(200ms) */
         uint32_t rfid_flags = osThreadFlagsWait(RFID_FLAG_IRQ, osFlagsWaitAny, RFID_POLL_INTERVAL_MS);
-        if (rfid_flags & RFID_FLAG_IRQ) {
+        if ((rfid_flags & RFID_FLAG_IRQ) && RFIDTASK_VERBOSE_LOG) {
             Rfid_Printf("[RFID] IRQ wake\r\n");
-        } else {
+        } else if (RFIDTASK_VERBOSE_LOG) {
             Rfid_Printf("[RFID] Timeout poll\r\n");
         }
 
         /* 心跳计数 */
         task_run_count[7]++;
 
+        Rfid_EnsureRfField();
+        {
+            uint8_t loop_version = Rfid_ReadReg(RFID_REG_VERSION);
+            if ((loop_version == 0x00U) || (loop_version == 0xFFU)) {
+                Rfid_PrintTransferProbe("BADVER");
+                Rfid_Printf("[RFID] BADVER recovery init\r\n");
+                Rfid_HardwareInit();
+                osDelay(20U);
+                continue;
+            }
+        }
+
         /* 读取卡片UID */
-        Rfid_Printf("[RFID] read attempt... ");
+        if (RFIDTASK_VERBOSE_LOG) {
+            Rfid_Printf("[RFID] read attempt... ");
+        }
         RfidStatus_t read_status = Rfid_ReadCardUid(uid, &uid_size);
         if (read_status == RFID_STATUS_OK) {
-            Rfid_Printf("[RFID] read OK\r\n");
+            if (RFIDTASK_VERBOSE_LOG) {
+                Rfid_Printf("[RFID] read OK\r\n");
+            }
             /* 显示CRC8压缩过程 */
             {
                 uint8_t calc_id = Rfid_CalcCompressedId(uid, uid_size);
-                Rfid_Printf("[RFID] CRC8 compress: UID[0..3]=%02X%02X%02X%02X -> id=%u\r\n",
-                            uid[0], uid[1], uid[2], uid[3], (unsigned)calc_id);
+                if (RFIDTASK_VERBOSE_LOG) {
+                    Rfid_Printf("[RFID] CRC8 compress: UID[0..3]=%02X%02X%02X%02X -> id=%u\r\n",
+                                uid[0], uid[1], uid[2], uid[3], (unsigned)calc_id);
+                }
             }
             /* 检查是否是新标签 */
             if (!Rfid_IsSameUid(uid, uid_size)) {
@@ -676,15 +804,20 @@ void StartRfidTask(void *argument)
                 g_rfid_last_uid_size = uid_size;
             } else {
                 /* 相同标签，重置丢失计数 */
-                Rfid_Printf("[RFID] same tag, miss_count reset\r\n");
+                if (RFIDTASK_VERBOSE_LOG) {
+                    Rfid_Printf("[RFID] same tag, miss_count reset\r\n");
+                }
                 miss_count = 0U;
             }
             /* 重置硬件恢复计数 */
             reset_count = 0U;
         } else {
             /* 读取失败，增加丢失计数 */
-            Rfid_Printf("[RFID] read FAIL status=%d miss=%u/%u\r\n",
-                        (int)read_status, (unsigned)miss_count, (unsigned)RFID_MISS_LIMIT);
+            if (read_status == RFID_STATUS_ERROR) {
+                Rfid_Printf("[RFID] read FAIL status=%d miss=%u/%u\r\n",
+                            (int)read_status, (unsigned)miss_count, (unsigned)RFID_MISS_LIMIT);
+                Rfid_PrintStatus((read_status == RFID_STATUS_NO_TAG) ? "NO_TAG" : "ERROR");
+            }
             if (miss_count < RFID_MISS_LIMIT) {
                 ++miss_count;
             }
@@ -716,6 +849,21 @@ void StartRfidTask(void *argument)
                 g_rfid_last_uid_size = 0U;
                 memset(g_rfid_last_uid, 0, sizeof(g_rfid_last_uid));
                 Rfid_ClearTag();
+            }
+        }
+
+        {
+            uint32_t now_diag_tick = osKernelGetTickCount();
+            if ((now_diag_tick - last_diag_tick) >= RFID_DIAG_INTERVAL_MS) {
+                last_diag_tick = now_diag_tick;
+                Rfid_Printf("[RFIDDIAG] status=%d miss=%u/%u present=%u id=%u loc=%s\r\n",
+                            (int)read_status,
+                            (unsigned)miss_count,
+                            (unsigned)RFID_MISS_LIMIT,
+                            (unsigned)Rfid_IsTagPresent(),
+                            (unsigned)Rfid_ReadTag(),
+                            Rfid_GetLocation(Rfid_ReadTag()));
+                Rfid_PrintStatus("DIAG");
             }
         }
     }

@@ -22,9 +22,9 @@ typedef enum {
 } ReturnState;
 
 /* 温度控制参数 */
-#define RETURN_SPIN_CYCLES        53U      /* 180度转向周期数 */
-#define RETURN_FIND_LINE_TIMEOUT  60U      /* 寻找轨道超时 */
-#define RETURN_FIND_LINE_PWM      420U     /* 寻找轨道PWM */
+#define RETURN_SPIN_CYCLES        133U     /* 180度转向周期数(按PWM比例调整) */
+#define RETURN_FIND_LINE_TIMEOUT  100U     /* 寻找轨道超时 */
+#define RETURN_FIND_LINE_PWM      250U     /* 寻找轨道PWM */
 #define WARNING_SPEED_RATIO       50U      /* 报警时速度比例(%) */
 
 /* 静态变量定义 */
@@ -131,9 +131,9 @@ MotorCmd_t ThermalCtrl_Emergency(SensorData_t *data)
 
     case RETURN_SPIN_180:
         cmd.cmd = MOTOR_CMD_SPIN_RIGHT;
-        cmd.pwm = 700U;
-        cmd.pwm_left = 700U;
-        cmd.pwm_right = 700U;
+        cmd.pwm = 280U;
+        cmd.pwm_left = 280U;
+        cmd.pwm_right = 280U;
         if (++return_counter >= RETURN_SPIN_CYCLES) {
             return_state = RETURN_FIND_LINE;
             return_counter = 0U;

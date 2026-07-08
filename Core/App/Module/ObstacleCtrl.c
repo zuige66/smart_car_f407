@@ -28,16 +28,16 @@ typedef enum {
 } ObstacleState;
 
 /* 避障控制参数 */
-#define OBS_SCAN_PWM             620U    /* 扫描旋转PWM */
-#define OBS_FIND_PWM             420U    /* 寻找轨道PWM */
-#define OBS_FORWARD_PWM          280U    /* 绕行前进PWM */
+#define OBS_SCAN_PWM             310U    /* 扫描旋转PWM */
+#define OBS_FIND_PWM             250U    /* 寻找轨道PWM */
+#define OBS_FORWARD_PWM          215U    /* 绕行前进PWM */
 #define OBS_BRAKE_CYCLES         8U      /* 刹车周期数 */
-#define OBS_SCAN_ANGLE_CYCLES    18U     /* 扫描角度周期数 */
+#define OBS_SCAN_ANGLE_CYCLES    36U     /* 扫描角度周期数 */
 #define OBS_SAMPLE_CYCLES        14U     /* 采样周期数 */
-#define OBS_TURN_90_CYCLES       27U     /* 90度转弯周期数 */
+#define OBS_TURN_90_CYCLES       54U     /* 90度转弯周期数 */
 #define OBS_ADVANCE_MIN_CYCLES   18U     /* 最小前进周期数 */
 #define OBS_ADVANCE_MAX_CYCLES   70U     /* 最大前进周期数 */
-#define OBS_FIND_LINE_TIMEOUT    50U     /* 寻找轨道超时 */
+#define OBS_FIND_LINE_TIMEOUT    84U     /* 寻找轨道超时 */
 #define OBS_TOTAL_TIMEOUT        420U    /* 总超时时间 */
 
 /* 静态变量定义 */

@@ -35,7 +35,7 @@
 static inline void Board_BuzzerSet(uint8_t on)
 {
     HAL_GPIO_WritePin(BUZZER_IN_GPIO_Port, BUZZER_IN_Pin,
-                      on ? GPIO_PIN_RESET : GPIO_PIN_SET);
+                      on ? GPIO_PIN_SET : GPIO_PIN_RESET);
 }
 
 static inline void Board_StatusLedSet(uint8_t on)

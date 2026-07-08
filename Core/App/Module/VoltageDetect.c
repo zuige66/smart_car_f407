@@ -135,6 +135,7 @@ uint8_t Voltage_GetBatteryPercent(void)
  */
 void Voltage_Update(void)
 {
+    (void)Voltage_ReadADC();
     g_battery_voltage = Voltage_GetBatteryVoltage();
     g_battery_percent = Voltage_GetBatteryPercent();
 }

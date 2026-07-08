@@ -88,9 +88,10 @@ void HAL_ADC_MspInit(ADC_HandleTypeDef* adcHandle)
 
     __HAL_RCC_GPIOC_CLK_ENABLE();
     /**ADC1 GPIO Configuration
-    PC1     ------> ADC1_IN11
+    PC0     ------> ADC1_IN10 (Battery)
+    PC1     ------> ADC1_IN11 (MQ-8)
     */
-    GPIO_InitStruct.Pin = MG8_AO_Pin;
+    GPIO_InitStruct.Pin = MG8_AO_Pin | GPIO_PIN_0;
     GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     HAL_GPIO_Init(MG8_AO_GPIO_Port, &GPIO_InitStruct);
