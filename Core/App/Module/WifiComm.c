@@ -178,7 +178,7 @@ static void Wifi_BuildCompactTelemetry(char *line, size_t line_size, const Senso
     Wifi_FormatTenths(dist_buf, sizeof(dist_buf),
                       (int)(data->distance * 10.0f + ((data->distance >= 0.0f) ? 0.5f : -0.5f)));
     Wifi_FormatTenths(bat_vol_buf, sizeof(bat_vol_buf),
-                      (int)(g_battery_voltage * 100.0f + 0.5f));
+                      (int)(g_battery_voltage * 10.0f + 0.5f));
     Wifi_FormatTrackBin(track_bin, sizeof(track_bin), track);
 
     (void)snprintf(line, line_size,

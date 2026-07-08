@@ -35,6 +35,7 @@ extern volatile uint32_t task_run_count[]; /* 任务运行计数(心跳监控) *
 #define RFID_FAIL_LOG_DIV 8U            /* 普通NO_TAG限频打印，避免串口阻塞RFID任务 */
 #define RFID_REQUEST_RETRY 6U           /* 每轮读卡内REQA/WUPA重试次数，提高识别灵敏度 */
 #define RFID_DIAG_INTERVAL_MS 500U      /* RFID专用串口诊断周期 */
+#define RFID_NO_TAG_RECOVERY_MISSES 12U /* 连续NO_TAG后尝试恢复射频场 */
 
 /* RC522命令寄存器指令 */
 #define RFID_CMD_IDLE 0x00U             /* 空闲命令 */
@@ -837,6 +838,10 @@ void StartRfidTask(void *argument)
                 }
             } else {
                 reset_count = 0U;
+                if (miss_count == RFID_NO_TAG_RECOVERY_MISSES) {
+                    Rfid_Printf("[RFID] NO_TAG RF recovery miss=%u\r\n", (unsigned)miss_count);
+                    Rfid_HardwareInit();
+                }
             }
 
             /* 连续普通漏读超过阈值后才清除标签；NO_TAG不再触发硬件复位 */
@@ -849,6 +854,9 @@ void StartRfidTask(void *argument)
                 g_rfid_last_uid_size = 0U;
                 memset(g_rfid_last_uid, 0, sizeof(g_rfid_last_uid));
                 Rfid_ClearTag();
+                Rfid_Printf("[RFID] NO_TAG limit recovery init\r\n");
+                Rfid_HardwareInit();
+                miss_count = 0U;
             }
         }
 

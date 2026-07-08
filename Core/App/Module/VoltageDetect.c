@@ -10,27 +10,25 @@
 #include <stdio.h>
 
 /* Voltage divider parameters */
-#define BATTERY_R1          27000.0f   /* Upper resistor 27K */
-#define BATTERY_R2          10000.0f   /* Lower resistor 10K */
-#define BATTERY_DIV_RATIO   (BATTERY_R2 / (BATTERY_R1 + BATTERY_R2))  /* 0.2703 */
+#define BATTERY_DIV_RATIO   (3.3f / 12.0f)  /* 0.275, ADC输入/电池电压 */
 
 /* ADC parameters */
 #define ADC_MAX_VALUE       4095.0f
 #define ADC_VREF            3.3f
 
-/* 12V lithium battery parameters (3S) */
-#define BATTERY_FULL_VOL    12.6f      /* Fully charged voltage */
-#define BATTERY_EMPTY_VOL   9.0f       /* Discharge cutoff voltage */
+/* 12V lithium battery parameters */
+#define BATTERY_FULL_VOL    12.0f      /* Fully charged voltage */
+#define BATTERY_EMPTY_VOL   8.0f       /* Discharge cutoff voltage */
 #define BATTERY_VOL_RANGE   (BATTERY_FULL_VOL - BATTERY_EMPTY_VOL)
 
 /* ADC filter buffer */
-#define ADC_FILTER_SIZE     16
+#define ADC_FILTER_SIZE     8
 static uint16_t adc_battery_buf[ADC_FILTER_SIZE];
 static uint8_t adc_buf_idx = 0;
 static uint8_t adc_buf_full = 0;
 
 /* Global variables */
-volatile float g_battery_voltage = 12.6f;      /* Battery voltage (V) */
+volatile float g_battery_voltage = 12.0f;      /* Battery voltage (V) */
 volatile uint8_t g_battery_percent = 100U;     /* Battery percentage (%) */
 
 /**
@@ -102,8 +100,12 @@ float Voltage_GetBatteryVoltage(void)
     /* ADC to voltage */
     float adc_voltage = ((float)adc_value / ADC_MAX_VALUE) * ADC_VREF;
 
-    /* Reverse calculate actual voltage */
-    float battery_voltage = adc_voltage / BATTERY_DIV_RATIO;
+    /* Linear mapping: 12V->3.3V, 8V->0V */
+    float battery_voltage = (adc_voltage / 0.825f) + 8.0f;
+
+    /* Clamp to reasonable range */
+    if (battery_voltage > 13.0f) battery_voltage = 13.0f;
+    if (battery_voltage < 7.5f) battery_voltage = 7.5f;
 
     return battery_voltage;
 }
