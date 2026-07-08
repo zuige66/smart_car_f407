@@ -4,9 +4,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define AI_SCORE_NORMAL_MIN     70U
-#define AI_SCORE_WARNING_MIN    50U
-#define AI_SCORE_ALARM_MIN      30U
+#define AI_SCORE_NORMAL_MIN     80U
+#define AI_SCORE_WARNING_MIN    70U
 
 typedef enum {
     AI_LEARN_DONE = 0,

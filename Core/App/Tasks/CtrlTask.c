@@ -28,8 +28,8 @@
 #define CTRLTASK_VERBOSE_LOG 0      /* detailed heartbeat log */
 #define RFID_TRIGGER_COOLDOWN_MS 10000U /* same RFID tag cooldown */
 #define RFID_COOLDOWN_SLOTS 8U          /* recent RFID tag cache */
-#define RFID_RETURN_HOME_PWM      280U  /* 返航掉头PWM */
-#define RFID_RETURN_HOME_MS       800U  /* 返航掉头时长(ms) */
+#define RFID_RETURN_HOME_PWM      330U  /* 返航掉头PWM */
+#define RFID_RETURN_HOME_CYCLES   56U   /* 返航180度掉头周期数 */
 
 /* 全局变量声明：从其他任务读取传感器数�?*/
 extern volatile float g_distance;              /* 超声波距�?cm) */
@@ -61,7 +61,7 @@ static uint8_t rfid_measure_active = 0U;                /* RFID测量激活标�
 static uint32_t rfid_measure_tick = 0U;                 /* RFID测量开始时间戳 */
 static uint32_t rfid_measure_last_print = 0U;           /* RFID测量上次打印时间(�? */
 static uint8_t rfid_return_home_active = 0U;            /* RFID返航激活标�?end_stop触发) */
-static uint32_t rfid_return_home_tick = 0U;             /* RFID返航开始时间戳 */
+static uint32_t rfid_return_home_counter = 0U;          /* RFID返航掉头计数 */
 static uint8_t rfid_return_home_done = 0U;              /* RFID返航完成标志 */
 static uint32_t thermal_exit_tick = 0U;                  /* 温度状态退出防抖时间戳 */
 
@@ -241,10 +241,13 @@ static void Ctrl_ResetThermalTick(void)
  */
 static SystemState Ctrl_AiScoreToState(uint8_t similarity)
 {
-    if (similarity >= AI_SCORE_NORMAL_MIN)  return STATE_PATROL;
-    if (similarity >= AI_SCORE_WARNING_MIN) return STATE_THERMAL_ALERT;
-    if (similarity >= AI_SCORE_ALARM_MIN)   return STATE_THERMAL_WARNING;
-    return STATE_EMERGENCY;
+    if (similarity >= AI_SCORE_NORMAL_MIN) {
+        return STATE_PATROL;
+    }
+    if (similarity >= AI_SCORE_WARNING_MIN) {
+        return STATE_THERMAL_ALERT;
+    }
+    return STATE_THERMAL_WARNING;
 }
 
 /**
@@ -417,7 +420,7 @@ static void Ctrl_HandleRfidEvent(const SensorData_t *data)
         } else if (strcmp(loc, "end_stop") == 0) {
             rfid_return_home_active = 1U;
             rfid_return_home_done = 0U;
-            rfid_return_home_tick = osKernelGetTickCount();
+            rfid_return_home_counter = 0U;
             Ctrl_Printf("[CTRL] -> RETURN HOME spin 180\r\n");
         } else if (strncmp(loc, "place_", 6) == 0) {
             rfid_measure_active = 1U;
@@ -587,14 +590,12 @@ void StartCtrlTask(void *argument)
 
         /* 步骤7：RFID返航强制覆盖(原地右转1.5�? */
         if (rfid_return_home_active) {
-            uint32_t elapsed = osKernelGetTickCount() - rfid_return_home_tick;
-
             cmd.cmd = MOTOR_CMD_SPIN_RIGHT;
             cmd.pwm = RFID_RETURN_HOME_PWM;
             cmd.pwm_left = RFID_RETURN_HOME_PWM;
             cmd.pwm_right = RFID_RETURN_HOME_PWM;
             /* 掉头完成(1.5�?，切换到待机状�?*/
-            if (elapsed >= RFID_RETURN_HOME_MS) {
+            if (++rfid_return_home_counter >= RFID_RETURN_HOME_CYCLES) {
                 rfid_return_home_active = 0U;
                 rfid_return_home_done = 1U;
                 current_state = STATE_STANDBY;

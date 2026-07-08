@@ -22,9 +22,9 @@ typedef enum {
 } ReturnState;
 
 /* 温度控制参数 */
-#define RETURN_SPIN_CYCLES        54U      /* 180度转向周期数 */
+#define RETURN_SPIN_CYCLES        56U      /* 180度转向周期数 */
 #define RETURN_FIND_LINE_TIMEOUT  100U     /* 寻找轨道超时 */
-#define RETURN_FIND_LINE_PWM      330U     /* 寻找轨道PWM */
+#define RETURN_FIND_LINE_PWM      250U     /* 寻找轨道PWM */
 #define WARNING_SPEED_RATIO       50U      /* 报警时速度比例(%) */
 
 /* 静态变量定义 */
