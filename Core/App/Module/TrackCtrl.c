@@ -2,9 +2,9 @@
   ******************************************************************************
   * @file    TrackCtrl.c
   * @brief   循迹控制模块实现
-  *          实现基于PID的循迹算法，支持多种轨道检测模�?
+  *          实现基于PID的循迹算法，支持多种轨道检测模�?
   *          传感器布局(从左到右): S1 S2 S3 S4
-  *          检测状�? 0-未检测到黑线, 1-检测到黑线
+  *          检测状�? 0-未检测到黑线, 1-检测到黑线
   ******************************************************************************
   */
 
@@ -22,42 +22,42 @@
 typedef enum {
     TRACK_MODE_FOLLOW = 0,     /* 正常跟随模式 */
     TRACK_MODE_CROSS,          /* 十字路口模式 */
-    TRACK_MODE_SHARP_LEFT,     /* 急左转模�?*/
-    TRACK_MODE_SHARP_RIGHT,    /* 急右转模�?*/
-    TRACK_MODE_SEARCH_LEFT,    /* 左搜索模�?丢失轨道) */
-    TRACK_MODE_SEARCH_RIGHT    /* 右搜索模�?丢失轨道) */
+    TRACK_MODE_SHARP_LEFT,     /* 急左转模�?*/
+    TRACK_MODE_SHARP_RIGHT,    /* 急右转模�?*/
+    TRACK_MODE_SEARCH_LEFT,    /* 左搜索模�?丢失轨道) */
+    TRACK_MODE_SEARCH_RIGHT    /* 右搜索模�?丢失轨道) */
 } TrackMode_t;
 
-/* 静态变量定�?*/
-static PID_HandleTypeDef speed_pid;      /* 速度PID控制�?*/
-static PID_HandleTypeDef turn_pid;       /* 转向PID控制�?*/
-static int8_t g_last_track_error = 0;    /* 最后检测到的偏移误�?*/
+/* 静态变量定�?*/
+static PID_HandleTypeDef speed_pid;      /* 速度PID控制�?*/
+static PID_HandleTypeDef turn_pid;       /* 转向PID控制�?*/
+static int8_t g_last_track_error = 0;    /* 最后检测到的偏移误�?*/
 static TrackMode_t g_track_mode = TRACK_MODE_FOLLOW;  /* 当前循迹模式 */
-static uint32_t g_track_mode_ticks = 0U; /* 当前模式持续tick�?*/
+static uint32_t g_track_mode_ticks = 0U; /* 当前模式持续tick�?*/
 static uint8_t g_lost_line_count = 0U;   /* 连续丢线计数(防抖) */
 
 /* 循迹控制参数 */
 #define TARGET_SPEED             215.0f   /* 目标速度：整体慢一点，避免入弯冲出 */
-#define TRACK_CTRL_DT_S          0.08f    /* 控制周期(秒，匹配传感�?0ms更新) */
-#define TRACK_PWM_MIN            100      /* PWM最小�?*/
-#define TRACK_PWM_MAX            360      /* PWM最大值：降低整体速度 */
+#define TRACK_CTRL_DT_S          0.08f    /* 控制周期(秒，匹配传感�?0ms更新) */
+#define TRACK_PWM_MIN            100      /* PWM最小�?*/
+#define TRACK_PWM_MAX            450      /* PWM最大值 */
 #define TRACK_LOST_GAIN          1.2f     /* 轨道丢失时的增益系数 */
 #define TRACK_CROSS_SPEED        170U     /* 十字路口通过速度 */
 #define TRACK_SHARP_TURN_SPEED   160U     /* 急转时基础速度 */
 #define TRACK_SEARCH_SPEED       210U     /* 搜索时基础速度 */
-#define TRACK_TURN_GAIN          105      /* 转向比例系数：ERR=1时差速约105 */
-#define TRACK_TURN_PWM_DIFF_MAX  230U     /* 转弯时左右轮最大差�?*/
+#define TRACK_TURN_GAIN          250      /* 转向比例系数：ERR=1时差速约250 */
+#define TRACK_TURN_PWM_DIFF_MAX  350U     /* 转弯时左右轮最大差�?*/
 #define TRACK_INNER_LINE_SPEED   190.0f   /* 0010/0100轻偏时降低基础速度 */
-#define TRACK_EDGE_LINE_SPEED    210.0f   /* 0001/1000边缘线时略降速但加大差�?*/
+#define TRACK_EDGE_LINE_SPEED    210.0f   /* 0001/1000边缘线时略降速但加大差�?*/
 #define TRACK_LOST_TURN_SPEED    210.0f   /* 0000短暂丢线时保持转弯速度 */
-#define TRACK_CROSS_HOLD_TICKS   8U       /* 十字路口保持tick�?*/
-#define TRACK_SHARP_HOLD_TICKS   2U       /* 急转最小保持tick�?*/
-#define TRACK_LOST_HOLD_TICKS    10U      /* 丢线后继续沿上次方向转弯的tick�?*/
-#define TRACK_SEARCH_TIMEOUT_TICKS 30U    /* 搜索超时tick�?*/
+#define TRACK_CROSS_HOLD_TICKS   8U       /* 十字路口保持tick�?*/
+#define TRACK_SHARP_HOLD_TICKS   2U       /* 急转最小保持tick�?*/
+#define TRACK_LOST_HOLD_TICKS    10U      /* 丢线后继续沿上次方向转弯的tick�?*/
+#define TRACK_SEARCH_TIMEOUT_TICKS 30U    /* 搜索超时tick�?*/
 
 /**
  * @brief 计算循迹误差
- * @param track_data 循迹传感器数�?�?位有�?
+ * @param track_data 循迹传感器数�?�?位有�?
  * @return 偏移误差(-3~3), 负数表示偏左, 正数表示偏右
  */
 static int8_t TrackCtrl_CalculateError(uint8_t track_data)
@@ -68,7 +68,7 @@ static int8_t TrackCtrl_CalculateError(uint8_t track_data)
     case 0x0A:  /* 1010 - S2,S4检测到 */
         return 0;  /* 居中 */
     case 0x09:  /* 1001 - S1,S4检测到(十字路口) */
-        return 0;  /* 居中，但会被识别为十字路�?*/
+        return 0;  /* 居中，但会被识别为十字路�?*/
     case 0x02:  /* 0010 - S2检测到 */
         return -1; /* 轻微偏左 */
     case 0x01:  /* 0001 - S1检测到 */
@@ -84,8 +84,8 @@ static int8_t TrackCtrl_CalculateError(uint8_t track_data)
         return 2;  /* 明显偏右 */
     case 0x0B:  /* 1011 - S1,S2,S4检测到 */
         return 3;  /* 严重偏右 */
-    case 0x00:  /* 0000 - 无检�?丢失轨道) */
-        /* 沿最后方向继续搜�?*/
+    case 0x00:  /* 0000 - 无检�?丢失轨道) */
+        /* 沿最后方向继续搜�?*/
         if (g_last_track_error > 0) {
             return (int8_t)(g_last_track_error * TRACK_LOST_GAIN);
         }
@@ -93,7 +93,7 @@ static int8_t TrackCtrl_CalculateError(uint8_t track_data)
             return (int8_t)(g_last_track_error * TRACK_LOST_GAIN);
         }
         return 0;
-    case 0x0F:  /* 1111 - 全检�?十字路口) */
+    case 0x0F:  /* 1111 - 全检�?十字路口) */
         return 0;
     default:
         return 0;
@@ -115,8 +115,8 @@ static void TrackCtrl_SetMode(TrackMode_t mode)
 
 /**
  * @brief 检查是否有可用的轨道线
- * @param track_data 循迹传感器数�?
- * @return 1-有可用轨�? 0-无可用轨�?
+ * @param track_data 循迹传感器数�?
+ * @return 1-有可用轨�? 0-无可用轨�?
  */
 uint8_t TrackCtrl_HasUsableLine(uint8_t track_data)
 {
@@ -125,8 +125,8 @@ uint8_t TrackCtrl_HasUsableLine(uint8_t track_data)
 
 /**
  * @brief 检查是否在轨道中心
- * @param track_data 循迹传感器数�?
- * @return 1-在中�? 0-不在中心
+ * @param track_data 循迹传感器数�?
+ * @return 1-在中�? 0-不在中心
  */
 uint8_t TrackCtrl_IsCenteredLine(uint8_t track_data)
 {
@@ -142,7 +142,7 @@ uint8_t TrackCtrl_IsCenteredLine(uint8_t track_data)
 }
 
 /**
- * @brief 获取最后检测到的方�?
+ * @brief 获取最后检测到的方�?
  * @return -1-向左偏移, 0-居中, 1-向右偏移
  */
 int8_t TrackCtrl_GetLastDirection(void)
@@ -171,23 +171,23 @@ const char* TrackCtrl_GetModeName(void)
 
 /**
  * @brief 检查是否为十字路口
- * @param track_data 循迹传感器数�?
- * @return 1-是十字路�? 0-不是
+ * @param track_data 循迹传感器数�?
+ * @return 1-是十字路�? 0-不是
  */
 static uint8_t TrackCtrl_IsCrossRoad(uint8_t track_data)
 {
-    /* 十字路口特征�?
-     * 0x0F = 1111 (全检�?
+    /* 十字路口特征�?
+     * 0x0F = 1111 (全检�?
      * 0x09 = 1001 (S1+S4检测，双线)
      */
     return (track_data == 0x0FU || track_data == 0x09U) ? 1U : 0U;
 }
 
 /**
- * @brief 检查是否需要急左�?
- * @param track_data 循迹传感器数�?
+ * @brief 检查是否需要急左�?
+ * @param track_data 循迹传感器数�?
  * @param track_error 当前偏移误差
- * @return 1-需要急左�? 0-不需�?
+ * @return 1-需要急左�? 0-不需�?
  */
 static uint8_t TrackCtrl_IsSharpLeft(uint8_t track_data, int8_t track_error)
 {
@@ -201,10 +201,10 @@ static uint8_t TrackCtrl_IsSharpLeft(uint8_t track_data, int8_t track_error)
 }
 
 /**
- * @brief 检查是否需要急右�?
- * @param track_data 循迹传感器数�?
+ * @brief 检查是否需要急右�?
+ * @param track_data 循迹传感器数�?
  * @param track_error 当前偏移误差
- * @return 1-需要急右�? 0-不需�?
+ * @return 1-需要急右�? 0-不需�?
  */
 static uint8_t TrackCtrl_IsSharpRight(uint8_t track_data, int8_t track_error)
 {
@@ -235,7 +235,7 @@ static MotorCmd_t TrackCtrl_MakeForward(uint16_t left_pwm, uint16_t right_pwm)
 
 /**
  * @brief 创建转向命令 (慢速转弯，差速小)
- * @param direction 方向(-1�? 1�?
+ * @param direction 方向(-1�? 1�?
  * @param base_speed 基础速度
  * @return 电机命令
  */
@@ -254,7 +254,7 @@ static MotorCmd_t TrackCtrl_MakeTurn(int8_t direction, uint16_t base_speed)
 
 /**
  * @brief 创建搜索命令(原地旋转)
- * @param direction 方向(-1�? 1�?
+ * @param direction 方向(-1�? 1�?
  * @return 电机命令
  */
 static MotorCmd_t TrackCtrl_MakeSearch(int8_t direction)
@@ -280,7 +280,7 @@ void TrackCtrl_Init(void)
     PID_SetOutputLimits(&speed_pid, 0.0f, (float)TRACK_PWM_MAX);
     PID_SetIntegralLimits(&speed_pid, -80.0f, 80.0f);
 
-    /* 初始化转向PID �?保守参数，减少振�?*/
+    /* 初始化转向PID �?保守参数，减少振�?*/
     PID_Init(&turn_pid, 20.0f, 1.5f, 8.0f);
     PID_SetSampleTime(&turn_pid, TRACK_CTRL_DT_S);
     PID_SetDerivativeFilter(&turn_pid, 0.3f);
@@ -292,7 +292,7 @@ void TrackCtrl_Init(void)
 }
 
 /**
- * @brief 重置循迹控制器状�?
+ * @brief 重置循迹控制器状�?
  */
 void TrackCtrl_Reset(void)
 {
@@ -306,7 +306,7 @@ void TrackCtrl_Reset(void)
 
 /**
  * @brief 执行循迹控制
- * @param data 传感器数�?
+ * @param data 传感器数�?
  * @return 电机控制命令
  */
 MotorCmd_t TrackCtrl_Run(SensorData_t *data)

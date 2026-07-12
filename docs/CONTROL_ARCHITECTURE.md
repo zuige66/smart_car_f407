@@ -382,3 +382,13 @@ Wifi_SendCommand("emergency"); // 紧急停止
 | Core/App/Module/BatteryCtrl.c | 电池控制算法 |
 | Core/App/Driver/motor.c | 电机底层驱动 |
 | Core/App/Driver/pid.c | PID控制算法 |
+
+---
+
+## 2026-07-12 控制逻辑更新
+
+- 状态判定优先级增加红外温度硬触发：`MLX90614 object_temp >= 60°C` 时进入 `STATE_EMERGENCY`。
+- AI 分数仅负责正常/预警/报警分级：`>=80` 正常，`70~79` 预警，`<70` 报警。
+- RFID `end_stop` 返航和高温紧急撤离保持同类动作：右旋 180°。
+- 当前 180° 实车校准值：`RETURN_SPIN_CYCLES=45`。
+- 当前循迹纠偏参数：`TRACK_TURN_GAIN=250`，`TRACK_TURN_PWM_DIFF_MAX=350`，`TRACK_PWM_MAX=450`。

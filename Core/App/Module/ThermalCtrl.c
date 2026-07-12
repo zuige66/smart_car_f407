@@ -22,7 +22,7 @@ typedef enum {
 } ReturnState;
 
 /* 温度控制参数 */
-#define RETURN_SPIN_CYCLES        56U      /* 180度转向周期数 */
+#define RETURN_SPIN_CYCLES        45U      /* 180度转向周期数 */
 #define RETURN_FIND_LINE_TIMEOUT  100U     /* 寻找轨道超时 */
 #define RETURN_FIND_LINE_PWM      250U     /* 寻找轨道PWM */
 #define WARNING_SPEED_RATIO       50U      /* 报警时速度比例(%) */
@@ -171,8 +171,13 @@ MotorCmd_t ThermalCtrl_Emergency(SensorData_t *data)
         break;
 
     case RETURN_DONE:
-        /* 返回完成，停止电机 */
-        cmd.cmd = MOTOR_CMD_STOP;
+        if (data->object_temp >= THERMAL_EMERGENCY_THRESHOLD) {
+            return_state = RETURN_IDLE;
+            return_counter = 0U;
+            return_done = 0U;
+        } else {
+            cmd.cmd = MOTOR_CMD_STOP;
+        }
         break;
 
     default:

@@ -286,8 +286,7 @@ static SystemState Ctrl_DetermineState(const SensorData_t *data)
 {
     AIStatus_t ai_status = AI_StatusGet();
     SystemState ai_req;
-
-    (void)data;
+    SystemState thermal_req;
 
     /* 高优先级覆盖：直接返回，不走AI判定 */
     if (rfid_return_home_active) {
@@ -295,6 +294,11 @@ static SystemState Ctrl_DetermineState(const SensorData_t *data)
         return STATE_LOW_BATTERY;   /* 复用低电量状态的返航行为 */
     }
     if (rfid_return_home_done) {
+        thermal_req = ThermalCtrl_GetState(data->object_temp);
+        if (thermal_req == STATE_EMERGENCY) {
+            rfid_return_home_done = 0U;
+            return STATE_EMERGENCY;
+        }
         Ctrl_ResetThermalTick();
         return STATE_STANDBY;       /* 返回完成，待�?*/
     }
@@ -303,8 +307,18 @@ static SystemState Ctrl_DetermineState(const SensorData_t *data)
         return manual_override_state; /* 使用上位机指定的状�?*/
     }
     if (!system_started) {
+        thermal_req = ThermalCtrl_GetState(data->object_temp);
+        if (thermal_req == STATE_EMERGENCY) {
+            return STATE_EMERGENCY;
+        }
         Ctrl_ResetThermalTick();
         return STATE_STANDBY;       /* 未启动，待机 */
+    }
+
+    /* Infrared object temperature has priority over AI score. */
+    thermal_req = ThermalCtrl_GetState(data->object_temp);
+    if (thermal_req != STATE_PATROL) {
+        return Ctrl_ThermalDebounce(thermal_req);
     }
 
     /* AI未就绪或未使用预训练模型 �?默认巡�?*/

@@ -1267,3 +1267,28 @@ cmake --build --preset Debug
 ---
 
 *文档版本: 2026-06-26 | 对应源码 git HEAD*
+
+---
+
+## 2026-07-12 当前实车调参状态
+
+### 温度 / AI 状态判定
+
+- `CtrlTask.c` 的状态机优先检查 `data.object_temp`，也就是 MLX90614 红外物体温度。
+- 当 `object_temp >= THERMAL_EMERGENCY_THRESHOLD`，当前阈值为 `60.0°C`，系统进入 `STATE_EMERGENCY`。
+- AI 相似度分数规则：`>=80` 正常巡逻，`70~79` 预警，`<70` 报警；AI 低分不直接进入紧急撤离。
+- 若 RFID 返航已完成但红外温度仍处于紧急阈值，状态机会重新进入 `STATE_EMERGENCY`。
+- 即使系统尚未启动，只要红外物体温度达到紧急阈值，也允许触发紧急撤离状态。
+
+### 紧急撤离 / RFID 返航
+
+- 高温紧急撤离与 RFID `end_stop` 返航保持一致：右旋约 180° 掉头。
+- `ThermalCtrl.c` 当前 `RETURN_SPIN_CYCLES=45`，用于实车校准 180° 掉头。
+- 紧急撤离完成后，如果红外目标仍然高于 60°C，会重置返回状态并再次执行撤离动作。
+
+### 循迹调参
+
+- 当前循迹速度上限：`TRACK_PWM_MAX=450`。
+- 当前转向比例：`TRACK_TURN_GAIN=250`。
+- 当前最大差速：`TRACK_TURN_PWM_DIFF_MAX=350`。
+- 以上参数用于提升 `0010`、`0001` 等偏线状态下的纠偏力度；若出现抽搐或过冲，应优先降低 `TRACK_TURN_GAIN` 和 `TRACK_TURN_PWM_DIFF_MAX`。

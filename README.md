@@ -45,3 +45,11 @@ cmake --build --preset Debug
 |---|---|
 | [CURRENT_CONFIG.md](CURRENT_CONFIG.md) | **完整技术参考手册** — 引脚映射、任务表、传感器、PID、RFID、WiFi 协议、状态机、避障、循迹、自检等所有细节 |
 | [PORTING_DIFF.md](PORTING_DIFF.md) | STM32F103 → STM32F407 迁移差异说明 |
+
+## 2026-07-12 当前调参记录
+
+- AI 分数：`>=80` 正常，`70~79` 预警，`<70` 报警；AI 分数不直接触发紧急撤离。
+- 红外温度：主控优先使用 `MLX90614 object_temp` 判断温度状态，`>=60°C` 进入 `STATE_EMERGENCY`。
+- 紧急撤离：`ThermalCtrl_Emergency()` 使用右旋 180° 掉头，当前 `RETURN_SPIN_CYCLES=45`。
+- RFID 返航：`end_stop` 与高温紧急撤离保持 180° 掉头逻辑一致。
+- 循迹当前参数：`TRACK_PWM_MAX=450`、`TRACK_TURN_GAIN=250`、`TRACK_TURN_PWM_DIFF_MAX=350`，用于增强偏线纠正能力。
